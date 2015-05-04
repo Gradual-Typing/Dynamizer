@@ -12,8 +12,6 @@ import Control.Monad (liftM)
 
 import Syntax
 
-import Debug.Trace
-
 -- Create a fresh type variable
 genTVar :: Substitution -> (Type,Substitution)
 genTVar (Substitution n s) = (TVar n,Substitution (succ n) s)
@@ -29,11 +27,9 @@ tvchase :: Substitution -> Type -> Type
 tvchase tve (TVar v) | Just t <- lookupSub tve v = tvchase tve t
 tvchase _ t = t
 
--- The unification. If unification failed, return the reason
 unify :: Type -> Type -> Substitution -> Either String Substitution
 unify t1 t2 tve = unify' (tvchase tve t1) (tvchase tve t2) tve
 
--- If either t1 or t2 are type variables, they are definitely unbound
 unify' :: Type -> Type -> Substitution -> Either String Substitution
 unify' IntTy IntTy = Right
 unify' BoolTy BoolTy = Right
@@ -145,7 +141,7 @@ teval' (Assign1 e1 e2) =
 teval' (Let1 x e1 e2) =
   teval' e1 >>= \(e1',t1, tve1) ->
   extendTy (x,t1) (resetSub tve1 (teval' e2)) >>= \(e2',t2,tve2) ->
-  return (Let2 (x,tvsub tve2 t1,e1') e2',t2,tve2)
+  return (Let2 (x,t1,e1') e2',t2,tve2)
 
 runTrMonad :: TrMonad a -> TrGamma -> IO (Either TrErr a)
 runTrMonad m = runErrorT . runReaderT m
@@ -167,4 +163,4 @@ loctvsub (Lam2 (x,t1) (e,t2)) s = Lam2 (x,tvsub s t1) (loctvsub e s, tvsub s t2)
 -- Resolve all type variables, as far as possible
 teval :: Exp1 -> IO (Either TrErr (Exp2, Type))
 teval e = runTrMonad (teval' e) TrGamma {tyCtx = L.empty, sub = Substitution 0 M.empty} >>=
-          \case Right (e',t,tve) -> traceShow tve $ return $ Right (loctvsub e' tve,tvsub tve t)
+          \case Right (e',t,tve) -> return $ Right (loctvsub e' tve,tvsub tve t)

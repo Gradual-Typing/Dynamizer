@@ -2,27 +2,6 @@ module Syntax where
 
 import qualified Data.IntMap as M
 
-{-
-Program        ::= Expression
-Lambda         ::= (lambda (Formal ...) Maybe-Type Expression)
-Expression     ::= Lambda
-               |   (let ([ID Maybe-Type Expression] ...) Expression)
-               |   (letrec ([ID Maybe-Type Lambda] ...) Expression)
-               |   (Expresion ...)
-               |   (: Expression Type Maybe-String)
-               |   (if Expression Expression Expression)
-               |   (Primitive Expression Expression)
-               |   (unbox expression)
-               |   (box expression)
-               |   (set expression expression)
-Primitive      ::= + | -  | * | binary-and | binary-or
-               |   < | <= | = | >= | >
-Type           ::= Dyn | Int | Bool | (-> Type ...)
-Maybe-type     ::=    | : type
-Maybe-String   ::=    | "[.^"]*"
-Formal         ::= ID | [ID : Type]
--}
-
 data Operator = Inc | Dec | ZeroQ deriving (Show,Eq,Read)
 
 type Name = String

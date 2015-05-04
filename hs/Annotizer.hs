@@ -2,7 +2,7 @@
 module Annotizer where
 
 import System.Directory (createDirectoryIfMissing)
-import Control.Monad (liftM)
+import Control.Monad (liftM, liftM2, liftM3)
 
 import Syntax
 import TRecon
@@ -13,15 +13,15 @@ annotize e = teval e >>= \case Right (e',_) -> return e'
 nAnnotize' :: Exp2 -> [Exp2]
 nAnnotize' (Op2 op e) = map (Op2 op) $ nAnnotize' e
 nAnnotize' (If2 e1 e2 e3) =
-  nAnnotize' e1 >>= \e1' ->  nAnnotize' e2 >>= \e2' ->  liftM (If2 e1' e2') $ nAnnotize' e3
+  liftM3 If2 (nAnnotize' e1) (nAnnotize' e2) $ nAnnotize' e3
 nAnnotize' (App2 e1 e2) =
-  nAnnotize' e1 >>= \e1' -> liftM (App2 e1') $ nAnnotize' e2
+  liftM2 App2 (nAnnotize' e1) $ nAnnotize' e2
 nAnnotize' (Lam2 (x,t1) (e,t2)) =
   nAnnotizeTy' t1 >>= \t1' -> nAnnotizeTy' t2 >>= \t2' -> nAnnotize' e >>= \e' -> return $ Lam2 (x,t1') (e',t2')
-nAnnotize' (Ref2 e) = map Ref2 $ nAnnotize' e
-nAnnotize' (DeRef2 e) = map DeRef2 $ nAnnotize' e
+nAnnotize' (Ref2 e) = liftM Ref2 $ nAnnotize' e
+nAnnotize' (DeRef2 e) = liftM DeRef2 $ nAnnotize' e
 nAnnotize' (Assign2 e1 e2) =
-  nAnnotize' e1 >>= \e1' -> liftM (Assign2 e1') $ nAnnotize' e2
+  liftM2 Assign2 (nAnnotize' e1) $ nAnnotize' e2
 nAnnotize' (Let2 (x,t,e1) e2) =
   nAnnotizeTy' t >>= \t' -> nAnnotize' e1 >>= \e1' -> liftM (Let2 (x,t',e1')) $ nAnnotize' e2
 nAnnotize' e = [e]
@@ -63,7 +63,3 @@ nAnnotize e = let testDirName = "test/" in createDirectoryIfMissing False testDi
   annotize e >>= \e' -> mapWrite 0 testDirName $ map (`schmlCodGen` "") $ nAnnotize' e'
   where mapWrite _ _ [] = return ()
         mapWrite n p (s:s') = writeFile (p ++ show n ++ ".schml") (s ++ "\n") >> mapWrite (n+1) p s'
-
-
---nAnnotizee :: Exp1 -> IO [Exp2]
---nAnnotizee e = annotize e >>= return . nAnnotize'
