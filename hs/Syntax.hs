@@ -2,14 +2,16 @@ module Syntax where
 
 import qualified Data.IntMap as M
 
-data Operator = Inc | Dec | ZeroQ deriving (Show,Eq,Read)
+data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
+              | ShiftR | ShiftL | BAnd | BOr
+                deriving (Show,Eq,Read)
 
 type Name = String
 
 data Exp1 =
   N1 Int
   | B1 Bool
-  | Op1 Operator Exp1
+  | Op1 Operator Exp1 Exp1
   | If1 Exp1 Exp1 Exp1
   | Var1 Name
   | App1 Exp1 Exp1
@@ -23,7 +25,7 @@ data Exp1 =
 data Exp2 =
   N2 Int
   | B2 Bool
-  | Op2 Operator Exp2
+  | Op2 Operator Exp2 Exp2
   | If2 Exp2 Exp2 Exp2
   | Var2 Name
   | App2 Exp2 Exp2

@@ -100,10 +100,31 @@ teval' :: Exp1 -> TrMonad (Exp2,Type,Substitution)
 teval' (Var1 x) = lookupTy x >>= \t -> liftM (Var2 x,t,) $ asks sub
 teval' (N1 n) = liftM (N2 n,IntTy,) $ asks sub
 teval' (B1 b) = liftM (B2 b,BoolTy,) $ asks sub
-teval' (Op1 op e) = teval' e >>= \(e',t,tve) ->
-  case unify t IntTy tve of
-   Right tve' -> return (Op2 op e',IntTy,tve')
+teval' (Op1 op e1 e2) | op `elem` [Plus, Minus, Mult, Div, ShiftR, ShiftL] = 
+  teval' e1 >>= \(e1',t1,tve1) ->
+  resetSub tve1 (teval' e2) >>= \(e2',t2,tve2) ->
+  case unify t1 IntTy tve2 of
+   Right tve3 -> case unify t2 IntTy tve3 of
+                  Right tve4 -> return (Op2 op e1' e2',IntTy,tve4)
+                  Left err -> error err
    Left err -> error err
+                      | op `elem` [Ge, Le, Gt, Lt] =
+                          teval' e1 >>= \(e1',t1,tve1) ->
+                          resetSub tve1 (teval' e2) >>= \(e2',t2,tve2) ->
+                          case unify t1 IntTy tve2 of
+                          Right tve3 -> case unify t2 IntTy tve3 of
+                            Right tve4 -> return (Op2 op e1' e2',BoolTy,tve4)
+                            Left err -> error err
+                          Left err -> error err
+                      | op == Eq =
+                          teval' e1 >>= \(e1',t1,tve1) ->
+                          resetSub tve1 (teval' e2) >>= \(e2',t2,tve2) ->
+                          let (t1f,tve3) = genTVar tve2 in
+                          case unify t1 t1f tve3 of
+                          Right tve4 -> case unify t2 t1f tve4 of
+                            Right tve5 -> return (Op2 op e1' e2',BoolTy,tve5)
+                            Left err -> error err
+                          Left err -> error err
 teval' (If1 e1 e2 e3) =
   teval' e1 >>= \(e1',t1,tve1) ->
   resetSub tve1 (teval' e2) >>= \(e2',t2,tve2) ->
@@ -150,7 +171,7 @@ runTrMonad m = runErrorT . runReaderT m
 loctvsub :: Exp2 -> Substitution -> Exp2
 loctvsub e@(N2 _) _ = e
 loctvsub e@(B2 _) _ = e
-loctvsub (Op2 op e) s = Op2 op $ loctvsub e s
+loctvsub (Op2 op e1 e2) s = Op2 op (loctvsub e1 s) $ loctvsub e2 s
 loctvsub (If2 e1 e2 e3) s = If2 (loctvsub e1 s) (loctvsub e2 s) $ loctvsub e3 s
 loctvsub e@(Var2 _) _ = e
 loctvsub (App2 e1 e2) s = App2 (loctvsub e1 s) $ loctvsub e2 s
