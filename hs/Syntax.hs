@@ -15,36 +15,20 @@ data Exp1 =
   | If1 Exp1 Exp1 Exp1
   | Var1 Name
   | App1 Exp1 Exp1
-  | Lam1 Name Exp1
-  | Ref1 Exp1
-  | DeRef1 Exp1
-  | Assign1 Exp1 Exp1
-  | Let1 Name Exp1 Exp1
+  | Lam1 (Name,Type) (Exp1,Type)
+  | GRef1 Exp1
+  | GDeRef1 Exp1
+  | GAssign1 Exp1 Exp1
+  | Let1 (Name,Type,Exp1) Exp1
+  | As1 Exp1 Type
   deriving (Show,Eq,Read)
-
-data Exp2 =
-  N2 Int
-  | B2 Bool
-  | Op2 Operator Exp2 Exp2
-  | If2 Exp2 Exp2 Exp2
-  | Var2 Name
-  | App2 Exp2 Exp2
-  | Lam2 (Name,Type) (Exp2,Type)
-  | Ref2 Exp2
-  | DeRef2 Exp2
-  | Assign2 Exp2 Exp2
-  | Let2 (Name,Type,Exp2) Exp2
-  deriving (Show,Eq,Read)
-
-type TVName = Int
 
 data Type =
   Dyn
   | IntTy
   | BoolTy
   | FunTy Type Type
-  | RefTy Type
-  | TVar TVName
+  | GRefTy Type
   deriving (Show,Eq,Read)
 
 type EnvT = [(Name, Type)]
