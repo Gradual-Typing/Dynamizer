@@ -19,8 +19,10 @@ data Exp1 =
   | GRef1 Exp1
   | GDeRef1 Exp1
   | GAssign1 Exp1 Exp1
-  | Let1 (Name,Type,Exp1) Exp1
+  | Let1 [(Name,Type,Exp1)] Exp1
+  | Letrec1 [(Name,Type,Exp1)] Exp1
   | As1 Exp1 Type
+  | Begin1 [Exp1] Exp1
   deriving (Show,Eq,Read)
 
 data Type =
