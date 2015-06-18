@@ -19,6 +19,8 @@ nAnnotize' (GAssign1 e1 e2) = liftM2 GAssign1 (nAnnotize' e1) $ nAnnotize' e2
 nAnnotize' (Let1 e1 e2) = mapM nAnnotizeCls' e1 >>= \e1' -> liftM (Let1 e1') $ nAnnotize' e2
 nAnnotize' (Letrec1 e1 e2) = mapM nAnnotizeCls' e1 >>= \e1' -> liftM (Letrec1 e1') $ nAnnotize' e2
 nAnnotize' (As1 e t) = liftM2 As1 (nAnnotize' e) $ nAnnotizeTy' t
+nAnnotize' (Begin1 e' e) = mapM nAnnotize' e' >>= \e'' -> liftM (Begin1 e'') $ nAnnotize' e
+nAnnotize' (Repeat1 i t1 t2 e) = liftM (Repeat1 i t1 t2) $ nAnnotize' e
 nAnnotize' e = [e]
 
 nAnnotizeCls' :: (Name,Type,Exp1) -> [(Name,Type,Exp1)]
@@ -59,22 +61,31 @@ schmlCodGen (Let1 e1 e2) = ("(let ("++) . schmlCodeClsGen e1 . (")\n"++) . schml
 schmlCodGen (Letrec1 e1 e2) = ("(letrec ("++) . schmlCodeClsGen e1 . (")\n"++) . schmlCodGen e2 . (')':)
 schmlCodGen (GRef1 e) = ("(gbox " ++) . schmlCodGen e . (')':)
 schmlCodGen (GDeRef1 e) = ("(gunbox " ++) . schmlCodGen e . (')':)
-schmlCodGen (GAssign1 e1 e2) = ("(box-set!"++) . schmlCodGen e1 . (' ':) . schmlCodGen e2 . (')':)
+schmlCodGen (GAssign1 e1 e2) = ("(gbox-set! "++) . schmlCodGen e1 . (' ':) . schmlCodGen e2 . (')':)
 schmlCodGen (As1 e t) = ("(: "++) . schmlCodGen e . (' ':) . ((schmlTyGen t ++ ")")++)
+schmlCodGen (Begin1 e' e) = ("(begin "++) . schmlCodeBgnGen e' . schmlCodGen e . (')':)
+schmlCodGen (Repeat1 i t1 t2 e) = (("(repeat (" ++ i ++ " " ++ show t1 ++ " " ++ show t2 ++ ") ")++) . schmlCodGen e . (')':)
+schmlCodGen TimerStart1 = ("(timer-start)"++)
+schmlCodGen TimerStop1 = ("(timer-stop)"++)
+schmlCodGen TimerReport1 = ("(timer-report)"++)
+
+schmlCodeBgnGen :: [Exp1] -> String -> String
+schmlCodeBgnGen [] = id
+schmlCodeBgnGen (e:e') = schmlCodGen e . (' ':) . schmlCodeBgnGen e'
 
 schmlCodeClsGen :: [(Name,Type,Exp1)] -> String -> String
 schmlCodeClsGen [] = id
-schmlCodeClsGen ((x,t,e):e') = ('[':) . ((x++" : " ++ schmlTyGen t ++ " ")++) . schmlCodGen e . ("]"++) . schmlCodeClsGen e'
+schmlCodeClsGen ((x,t,e):e') = ('[':) . ((x++" : " ++ schmlTyGen t ++ " ")++) . schmlCodGen e . (']':) . schmlCodeClsGen e'
                                  
 schmlTyGen :: Type -> String
 schmlTyGen Dyn = "Dyn"
 schmlTyGen IntTy = "Int"
 schmlTyGen BoolTy = "Bool"
 schmlTyGen (FunTy t1 t2) = "(" ++ schmlTyGen t1 ++ " -> " ++ schmlTyGen t2 ++ ")"
-schmlTyGen (GRefTy t) = "GRef " ++ schmlTyGen t
+schmlTyGen (GRefTy t) = "(GRef " ++ schmlTyGen t ++ ")"
 
-nAnnotize :: Exp1 -> IO ()
-nAnnotize e = let testDirName = "test/" in createDirectoryIfMissing False testDirName >>
-  mapWrite 0 testDirName (map (`schmlCodGen` "") $ nAnnotize' e)
+nAnnotize :: Exp1 -> Int -> IO ()
+nAnnotize e i = let testDirName = "test/" in createDirectoryIfMissing False testDirName >>
+  mapWrite 0 testDirName (map (`schmlCodGen` "") $ nAnnotize' (Begin1 [TimerStart1, (Repeat1 "i" 0 i e), TimerStop1] TimerReport1))
   where mapWrite _ _ [] = return ()
         mapWrite n p (s:s') = writeFile (p ++ show n ++ ".schml") (s ++ "\n") >> mapWrite (n+1) p s'

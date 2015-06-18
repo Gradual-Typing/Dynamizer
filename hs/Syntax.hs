@@ -23,6 +23,8 @@ data Exp1 =
   | Letrec1 [(Name,Type,Exp1)] Exp1
   | As1 Exp1 Type
   | Begin1 [Exp1] Exp1
+  | Repeat1 Name Int Int Exp1
+  | TimerStart1 | TimerStop1 | TimerReport1
   deriving (Show,Eq,Read)
 
 data Type =
