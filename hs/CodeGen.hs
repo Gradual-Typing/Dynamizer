@@ -1,8 +1,9 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module CodeGen (
-  schmlCodGen
+  codeGen
   ) where
 
 import Text.PrettyPrint
@@ -20,7 +21,7 @@ instance Pretty L1 where
 
 instance Pretty Exp1 where
   ppe (N1 a) = integer a
-  ppe (B1 b) = text (show b)
+  ppe (B1 b) = ppe b
   ppe Unit = text "()"
   ppe (Op1 op es) = parens $ ppe op <+> hsep (map ppe es)
   ppe (If1 e1 e2 e3) = parens $ text "if" <+> ppe e1 <+> ppe e2 <+> ppe e3
@@ -76,6 +77,10 @@ instance Pretty Arg where
     Dyn -> text x
     _ -> brackets $ text x <+> char ':' <+> ppe t
 
+instance Pretty Bool where
+  ppe True = text "#t"
+  ppe False = text "#f"
+
 instance Pretty Type where
   ppe Dyn = text "Dyn"
   ppe IntTy = text "Int"
@@ -87,5 +92,5 @@ instance Pretty Type where
   ppe (GVectTy t) = parens $ text "GVect" <+> ppe t
   ppe (MVectTy t) = parens $ text "MVect" <+> ppe t
 
-schmlCodGen :: L1 -> String
-schmlCodGen = render . ppe
+codeGen :: L1 -> String
+codeGen = render . ppe

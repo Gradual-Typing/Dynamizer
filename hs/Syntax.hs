@@ -1,10 +1,12 @@
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
+
 module Syntax where
 
 import Text.Parsec.Pos (SourcePos)
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr
-                deriving (Show,Eq,Read)
+                deriving (Eq)
 
 type Name = String
 type Arg = (Name,Type)
@@ -43,7 +45,7 @@ data Exp1 =
   | Begin1 [L1] L1
   | Repeat1 Name L1 L1 L1 -- int int e
   | TimerStart1 | TimerStop1 | TimerReport1
-  deriving (Show,Eq)
+  deriving (Eq)
 
 data Type =
   Dyn
@@ -55,6 +57,4 @@ data Type =
   | MRefTy Type
   | GVectTy Type
   | MVectTy Type
-  deriving (Show,Eq,Read)
-
-type EnvT = [(Name, Type)]
+  deriving (Eq)

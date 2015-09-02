@@ -1,19 +1,18 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans -fno-warn-unused-do-bind #-}
 
 -- TODO: add state for bound variables to check for unbound
--- TODO: add state for types to gather statistics about them
 
-import Syntax
+module Parser (parser) where
 
 import Control.Monad (void)
-import Data.Functor.Identity (Identity)
 import Text.Parsec
 import Text.Parsec.String (Parser)
 
---type State = 
-type PrMonad a = ParsecT String Int Identity a
+import Syntax
 
 -- sorted
 reservedNames :: [String]
@@ -96,13 +95,13 @@ argParser = do
 
 bindParser :: Parser Bind
 bindParser = do
-  char '['
+  char '[' <|> char '('
   x <- idParser
   string " : "
   t <- typeParser
   space
   e <- expParser
-  char ']'
+  char ']' <|> char ')'
   return (x,t,e)
 
 ifParser,varParser,appParser,opsParser,intParser,boolParser
@@ -147,15 +146,17 @@ boolParser = (\x -> B1 $ x == 't') <$ char '#' <*> (char 't' <|> char 'f')
 
 lambdaParser = do
   try $ string "lambda ("
-  args <- sepEndBy argParser space
+  args <- sepEndBy argParser whitespace
   string ") : "
   rt <- typeParser
   whitespace
   b <- expParser
   return $ Lam1 args b rt
 
-letParser = Let1 <$ try (string "let (") <*> sepEndBy bindParser space <* string ") " <*> expParser
-letrecParser = Letrec1 <$ try (string "letrec (") <*> sepEndBy bindParser space <* string ") " <*> expParser
+letParser = Let1 <$ try (string "let (") <*> sepEndBy bindParser space
+            <* char ')' <* whitespace <*> expParser
+letrecParser = Letrec1 <$ try (string "letrec (") <*> sepEndBy bindParser space
+               <* string ")" <* whitespace <*> expParser
 
 grefParser = c1Parser "gbox " GRef1
 gderefParser = c1Parser "gunbox " GDeRef1
@@ -250,7 +251,10 @@ typeParser = intTyParser
              <|> mvectTyParser
 
 schmlParser :: Parser L1
-schmlParser = id <$ whitespace <*> expParser <* eof
+schmlParser = id <$ many whitespace <*> expParser <* many whitespace <* eof
 
-main :: IO ()            
-main = parseTest schmlParser "(letrec ([x : (Int Int -> Int) (lambda ([x : Int] [y : Int]) : Int (* x (: -2 Int)))] [y : Bool #f]) (let ([z : Int 5] [t : () ()]) (if (> 3 1) (x z) 0)))"
+parser :: String -> Either ParseError L1
+parser = parse schmlParser ""
+  
+-- main :: IO ()            
+-- main = parseTest schmlParser "(letrec ([x : (Int Int -> Int) (lambda ([x : Int] [y : Int]) : Int (* x (: -2 Int)))] [y : Bool #f]) (let ([z : Int 5] [t : () ()]) (if (> 3 1) (x z) 0)))"

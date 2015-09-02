@@ -1,13 +1,11 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE TupleSections #-}
+{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Annotizer where
 
-import System.Directory (createDirectoryIfMissing)
-
 import Syntax
-import CodeGen
 
 class Gradual p where
   lattice :: p -> [p]
@@ -52,9 +50,3 @@ instance Gradual Type where
   lattice (MVectTy t) = Dyn: (MVectTy <$> lattice t)
   lattice (FunTy t1 t2) = Dyn: (FunTy <$> mapM lattice t1 <*> lattice t2)
   lattice t = [t,Dyn]
-
-nAnnotize :: L1 -> IO ()
-nAnnotize e = let testDirName = "test/" in createDirectoryIfMissing False testDirName *>
-  mapWrite 0 testDirName (map schmlCodGen $ lattice e)
-  where mapWrite _ _ [] = return ()
-        mapWrite n p (s:s') = writeFile (p ++ show n ++ ".schml") (s ++ "\n") *> mapWrite (n+1) p s'
