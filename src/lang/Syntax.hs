@@ -4,11 +4,13 @@ module Syntax where
 
 import Text.Parsec.Pos (SourcePos)
 
-type L a = (SourcePos, a)
-
 type Name = String
 type Arg = (Name,Type)
 type Args = [Arg]
+type Bind e = (Name,Type,e)
+type UBind e = (Name,e)
+type UBinds e = [UBind e]
+type Binds e = [Bind e]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr
@@ -25,3 +27,10 @@ data Type =
   | GVectTy Type
   | MVectTy Type
   deriving (Eq)
+
+newtype Fix e = In {out::e (Fix e)}
+
+-- data Ann a f x = Ann a (f x)
+data Ann a e = Ann a (e (Ann a e))
+
+type L a = Ann SourcePos a

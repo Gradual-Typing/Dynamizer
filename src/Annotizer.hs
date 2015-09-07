@@ -6,16 +6,20 @@
 module Annotizer where
 
 import L1
-
+  
 class Gradual p where
   lattice :: p -> [p]
   count   :: p -> Integer
+  dynamic :: p -> Double -> Double -> (Double,Double)
+  static  :: p -> Double
+  static e = let (dyns,alls) = dynamic e 0 0 in (alls - dyns) / alls
 
 instance Gradual L1 where
-  lattice (s,e) = map (s,) $ lattice e
-  count (_,e) = count e
-  
-instance Gradual Exp where
+  lattice (Ann _ e) = map (Ann undefined) $ lattice e -- source information is not relevant
+  count (Ann _ e) = count e
+  dynamic (Ann _ e) = dynamic e
+
+instance Gradual e => Gradual (ExpF e) where
   lattice (Op op es) = Op op <$> mapM lattice es
   lattice (If e1 e2 e3) = If <$> lattice e1 <*> lattice e2 <*> lattice e3
   lattice (App e1 es) = App <$> lattice e1 <*> mapM lattice es 
@@ -62,13 +66,48 @@ instance Gradual Exp where
   count (Repeat _ e1 e2 e) = count e1 * count e2 * count e
   count _ = 1
 
+  dynamic (Op _ es) a1 a2 = foldP es a1 a2
+  dynamic (If e1 e2 e3) a1 a2 = foldP [e1,e2,e3] a1 a2
+  dynamic (App e1 es) a1 a2 = foldP (e1:es) a1 a2
+  dynamic (Lam args e t) a1 a2 = let (a1',a2') = foldP (t:map snd args) a1 a2 in dynamic e a1' a2'
+  dynamic (GRef e) a1 a2 = dynamic e a1 a2
+  dynamic (GDeRef e) a1 a2 = dynamic e a1 a2
+  dynamic (GAssign e1 e2) a1 a2 = foldP [e1,e2] a1 a2
+  dynamic (MRef e) a1 a2 = dynamic e a1 a2
+  dynamic (MDeRef e) a1 a2 = dynamic e a1 a2
+  dynamic (MAssign e1 e2) a1 a2 = foldP [e1,e2] a1 a2
+  dynamic (GVect e1 e2) a1 a2 = foldP [e1,e2] a1 a2
+  dynamic (GVectRef e1 e2) a1 a2 = foldP [e1,e2] a1 a2
+  dynamic (GVectSet e1 e2 e3) a1 a2 = foldP [e1,e2,e3] a1 a2
+  dynamic (MVect e1 e2) a1 a2 = foldP [e1,e2] a1 a2
+  dynamic (MVectRef e1 e2) a1 a2 = foldP [e1,e2] a1 a2
+  dynamic (MVectSet e1 e2 e3) a1 a2 = foldP [e1,e2,e3] a1 a2
+  dynamic (Let e1 e2) a1 a2 = let (a1',a2') = foldP e1 a1 a2 in dynamic e2 a1' a2'
+  dynamic (Letrec e1 e2) a1 a2 = let (a1',a2') = foldP e1 a1 a2 in dynamic e2 a1' a2'
+  dynamic (As e t) a1 a2 = let (a1',a2') = dynamic e a1 a2 in dynamic t a1' a2'
+  dynamic (Begin e' e) a1 a2 = let (a1',a2') = foldP e' a1 a2 in dynamic e a1' a2'
+  dynamic (Repeat _ e1 e2 e) a1 a2  = foldP [e1,e2,e] a1 a2
+  dynamic _ a1 a2 = (a1,a2)
+
+foldP :: Gradual a => [a] -> Double -> Double -> (Double,Double)
+foldP es dyns alls = foldl (\(b1,b2) a -> dynamic a b1 b2) (dyns,alls) es
+
 instance Gradual Arg where
   lattice (x,t) = (x,) <$> lattice t
   count (_,t) = count t
+  dynamic (_,Dyn) a1 a2 = (a1+1,a2+1)
+  dynamic _ a1 a2 = (a1,a2+1)
 
-instance Gradual Bind where
+instance Gradual e => Gradual (Bind e) where
   lattice (x,t,e) =  (x,,) <$> lattice t <*> lattice e
   count (_,t,e) =  count t * count e
+  dynamic (_,Dyn,e) a1 a2 = dynamic e (a1+1) (a2+1)
+  dynamic (_,_,e) a1 a2 = dynamic e a1 (a2+1)
+
+instance {-# OVERLAPPABLE #-} Gradual e => Gradual (UBind e) where
+  lattice (x,e) =  (x,) <$> lattice e
+  count (_,e) = count e
+  dynamic (_,e) a1 a2 = dynamic e a1 (a2+1)
 
 instance Gradual Type where
   lattice (GRefTy t) = Dyn: (GRefTy <$> lattice t)
@@ -84,3 +123,6 @@ instance Gradual Type where
   count (MVectTy t) = 2 * count t
   count (FunTy t1 t2) = 2 * product (map count t1) * count t2
   count _ = 2
+
+  dynamic Dyn a1 a2 = (a1+1,a2+1)
+  dynamic _ a1 a2 = (a1,a2+1)

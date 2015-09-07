@@ -17,9 +17,9 @@ instance Pretty Name where
   ppe = text
 
 instance Pretty L1 where
-  ppe (_,e) = ppe e
+  ppe (Ann _ e) = ppe e
 
-instance Pretty Exp where
+instance Pretty e => Pretty (ExpF e) where
   ppe (N a) = integer a
   ppe (B b) = ppe b
   ppe Unit = text "()"
@@ -52,10 +52,13 @@ instance Pretty Exp where
   ppe TimerStop = text "(timer-stop)"
   ppe TimerReport = text "(timer-report)"
 
-instance Pretty Bind where
+instance Pretty e => Pretty (Bind e) where
   ppe (x,t,e) = brackets (case t of
                             Dyn ->  text x <+> ppe e
                             _ -> text x <+> char ':' <+> ppe t <+> ppe e)
+
+instance {-# OVERLAPPABLE #-} Pretty e => Pretty (UBind e) where
+  ppe (x,e) = brackets (text x <+> ppe e)
 
 instance Pretty Operator where
   ppe Plus = char '+'
