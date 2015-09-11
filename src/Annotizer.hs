@@ -3,6 +3,10 @@
 {-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
+-- The total number of all variants should -- be equal to
+-- 2^(number of annotations) + number of complex types
+
+
 module Annotizer where
 
 import L1
@@ -10,9 +14,9 @@ import L1
 class Gradual p where
   lattice :: p -> [p]
   count   :: p -> Integer
-  dynamic :: p -> Double -> Double -> (Double,Double)
+  dynamic :: p -> Int -> Int -> (Int,Int)
   static  :: p -> Double
-  static e = let (dyns,alls) = dynamic e 0 0 in (alls - dyns) / alls
+  static e = let (dyns,alls) = dynamic e 0 0 in fromIntegral (alls - dyns) / fromIntegral alls
 
 instance Gradual L1 where
   lattice (Ann _ e) = map (Ann undefined) $ lattice e -- source information is not relevant
@@ -23,7 +27,7 @@ instance Gradual e => Gradual (ExpF e) where
   lattice (Op op es) = Op op <$> mapM lattice es
   lattice (If e1 e2 e3) = If <$> lattice e1 <*> lattice e2 <*> lattice e3
   lattice (App e1 es) = App <$> lattice e1 <*> mapM lattice es 
-  lattice (Lam args e t) = Lam <$> mapM lattice args <*> lattice e <*> lattice t
+  lattice (Lam args e) = (Lam args) <$> lattice e
   lattice (GRef e) = GRef <$> lattice e
   lattice (GDeRef e) = GDeRef <$> lattice e
   lattice (GAssign e1 e2) = GAssign <$> lattice e1 <*> lattice e2
@@ -46,7 +50,7 @@ instance Gradual e => Gradual (ExpF e) where
   count (Op _ es) = product $ map count es
   count (If e1 e2 e3) = count e1 * count e2 * count e3
   count (App e1 es) = count e1* product (map count es)
-  count (Lam args e t) = product (map count args) * count e * count t
+  count (Lam _ e) = count e
   count (GRef e) = count e
   count (GDeRef e) = count e
   count (GAssign e1 e2) = count e1 * count e2
@@ -69,7 +73,7 @@ instance Gradual e => Gradual (ExpF e) where
   dynamic (Op _ es) a1 a2 = foldP es a1 a2
   dynamic (If e1 e2 e3) a1 a2 = foldP [e1,e2,e3] a1 a2
   dynamic (App e1 es) a1 a2 = foldP (e1:es) a1 a2
-  dynamic (Lam args e t) a1 a2 = let (a1',a2') = foldP (t:map snd args) a1 a2 in dynamic e a1' a2'
+  dynamic (Lam _ e) a1 a2 = dynamic e a1 a2
   dynamic (GRef e) a1 a2 = dynamic e a1 a2
   dynamic (GDeRef e) a1 a2 = dynamic e a1 a2
   dynamic (GAssign e1 e2) a1 a2 = foldP [e1,e2] a1 a2
@@ -89,25 +93,19 @@ instance Gradual e => Gradual (ExpF e) where
   dynamic (Repeat _ e1 e2 e) a1 a2  = foldP [e1,e2,e] a1 a2
   dynamic _ a1 a2 = (a1,a2)
 
-foldP :: Gradual a => [a] -> Double -> Double -> (Double,Double)
+foldP :: Gradual a => [a] -> Int -> Int -> (Int,Int)
 foldP es dyns alls = foldl (\(b1,b2) a -> dynamic a b1 b2) (dyns,alls) es
 
-instance Gradual Arg where
-  lattice (x,t) = (x,) <$> lattice t
-  count (_,t) = count t
-  dynamic (_,Dyn) a1 a2 = (a1+1,a2+1)
-  dynamic _ a1 a2 = (a1,a2+1)
+-- instance Gradual Arg where
+--   lattice (x,t) = (x,) <$> lattice t
+--   count (_,t) = count t
+--   dynamic (_,Dyn) a1 a2 = (a1+1,a2+1)
+--   dynamic _ a1 a2 = (a1,a2+1)
 
 instance Gradual e => Gradual (Bind e) where
   lattice (x,t,e) =  (x,,) <$> lattice t <*> lattice e
   count (_,t,e) =  count t * count e
-  dynamic (_,Dyn,e) a1 a2 = dynamic e (a1+1) (a2+1)
-  dynamic (_,_,e) a1 a2 = dynamic e a1 (a2+1)
-
-instance {-# OVERLAPPABLE #-} Gradual e => Gradual (UBind e) where
-  lattice (x,e) =  (x,) <$> lattice e
-  count (_,e) = count e
-  dynamic (_,e) a1 a2 = dynamic e a1 (a2+1)
+  dynamic (_,t,e) a1 a2 = let (a1',a2') = dynamic t a1 a2 in dynamic e a1' a2'
 
 instance Gradual Type where
   lattice (GRefTy t) = Dyn: (GRefTy <$> lattice t)
@@ -115,14 +113,20 @@ instance Gradual Type where
   lattice (GVectTy t) = Dyn: (GVectTy <$> lattice t)
   lattice (MVectTy t) = Dyn: (MVectTy <$> lattice t)
   lattice (FunTy t1 t2) = Dyn: (FunTy <$> mapM lattice t1 <*> lattice t2)
+  lattice Dyn = [Dyn]
   lattice t = [t,Dyn]
 
-  count (GRefTy t) = 2 * count t
-  count (MRefTy t) = 2 * count t
-  count (GVectTy t) = 2 * count t
-  count (MVectTy t) = 2 * count t
-  count (FunTy t1 t2) = 2 * product (map count t1) * count t2
+  count (GRefTy t) = count t + 1
+  count (MRefTy t) = count t + 1
+  count (GVectTy t) = count t + 1
+  count (MVectTy t) = count t + 1
+  count (FunTy t1 t2) = (product (map count t1) * count t2) + 1
   count _ = 2
 
   dynamic Dyn a1 a2 = (a1+1,a2+1)
+  dynamic (GRefTy t) a1 a2 = dynamic t a1 a2
+  dynamic (MRefTy t) a1 a2 = dynamic t a1 a2
+  dynamic (GVectTy t) a1 a2 = dynamic t a1 a2
+  dynamic (MVectTy t) a1 a2 = dynamic t a1 a2
+  dynamic (FunTy t1 t2) a1 a2 = foldP (t2:t1) a1 a2
   dynamic _ a1 a2 = (a1,a2+1)

@@ -67,10 +67,12 @@ integer = do
 op2Parser :: String -> Operator -> Parser L1
 op2Parser s op = do
   src <- getPosition
+  char '('
   try $ string s
   e1 <- expParser
   whitespace
   e2 <- expParser
+  char ')'
   return $ Ann src $ Op op [e1, e2]
 
 c1Parser :: String -> (L1 -> ExpF (Ann SourcePos ExpF)) -> Parser L1
@@ -107,14 +109,17 @@ idParser = try $ do
     then unexpected ("reserved word " ++ show name)
     else return name
 
-argParser :: Parser Arg
-argParser = do
-  char '['
-  x <- idParser
-  string " : "
-  t <- typeParser
-  char ']'
-  return (x,t)
+argParser :: Parser Name
+argParser = idParser
+
+-- tyArgParser :: Parser Arg
+-- tyArgParser = do
+--   char '['
+--   x <- idParser
+--   string " : "
+--   t <- typeParser
+--   char ']'
+--   return (x,t)
 
 bindParser :: Parser (Bind L1)
 bindParser = do
@@ -128,15 +133,6 @@ bindParser = do
   e <- expParser
   char ']' <|> char ')'
   return (x,t,e)
-
-utBindParser :: Parser (UBind L1)
-utBindParser = do
-  char '[' <|> char '('
-  x <- idParser
-  whitespace
-  e <- expParser
-  char ']' <|> char ')'
-  return (x,e)
 
 ifParser,varParser,appParser,opsParser,intParser,boolParser
   ,lambdaParser,letParser,letrecParser,grefParser,gderefParser
@@ -190,11 +186,12 @@ lambdaParser = do
   src <- getPosition
   try $ string "lambda ("
   args <- sepEndBy argParser whitespace
-  string ") : "
-  rt <- typeParser
+  char ')'
+  -- string ") : "
+  --rt <- typeParser
   whitespace
   b <- expParser
-  return $ Ann src $ Lam args b rt
+  return $ Ann src $ Lam args b
 
 letParser = do
   src <- getPosition
@@ -208,7 +205,7 @@ letParser = do
 letrecParser = do
   src <- getPosition
   try (string "letrec (")
-  binds <- sepEndBy utBindParser whitespace
+  binds <- sepEndBy bindParser whitespace
   char ')'
   whitespace
   e <- expParser
@@ -251,41 +248,41 @@ repeatParser = do
   whitespace
   end <- expParser
   char ')'
+  whitespace
   b <- expParser
   return $ Ann src $ Repeat x start end b
 
-timer = (annotate $ TimerStart <$ string "timer-start")
-        <|> (annotate $ TimerStop <$ string "timer-stop")
-        <|> (annotate $ TimerReport <$ string "timer-report")
+timer = (annotate $ TimerStart <$ try (string "(timer-start)"))
+        <|> (annotate $ TimerStop <$ try (string "(timer-stop)"))
+        <|> (annotate $ TimerReport <$ try (string "(timer-report)"))
 
 expParser :: Parser L1
 expParser = intParser
             <|> boolParser
-            <|> opsParser
             <|> unitParser
-            <|> ifParser
+            <|> try (parens ifParser)
             <|> varParser
-            <|> lambdaParser
-            <|> grefParser
-            <|> gderefParser
-            <|> grefsetParser
-            <|> mrefParser
-            <|> mderefParser
-            <|> mrefsetParser
-            <|> gvectParser
-            <|> gvectrefParser
-            <|> gvectsetParser
-            <|> mvectParser
-            <|> mvectrefParser
-            <|> mvectsetParser
-            <|> letParser
-            <|> letrecParser
-            <|> asParser
-            <|> beginParser
-            <|> repeatParser
-            <|> timer
+            <|> try (parens lambdaParser)
+            <|> try (parens grefParser)
+            <|> try (parens gderefParser)
+            <|> try (parens grefsetParser)
+            <|> try (parens mrefParser)
+            <|> try (parens mderefParser)
+            <|> try (parens mrefsetParser)
+            <|> try (parens gvectParser)
+            <|> try (parens gvectrefParser)
+            <|> try (parens gvectsetParser)
+            <|> try (parens mvectParser)
+            <|> try (parens mvectrefParser)
+            <|> try (parens mvectsetParser)
+            <|> try (parens letParser)
+            <|> try (parens letrecParser)
+            <|> try (parens asParser)
+            <|> try (parens beginParser)
+            <|> try (parens repeatParser)
+            <|> try timer
+            <|> try opsParser
             <|> try appParser
-            <|> parens expParser
 
 -- Type Parsers
 
@@ -310,11 +307,11 @@ typeParser = intTyParser
              <|> boolTyParser
              <|> dynTyParser
              <|> unitTyParser
-             <|> funTyParser
-             <|> grefTyParser
-             <|> mrefTyParser
-             <|> gvectTyParser
-             <|> mvectTyParser
+             <|> try funTyParser
+             <|> try grefTyParser
+             <|> try mrefTyParser
+             <|> try gvectTyParser
+             <|> try mvectTyParser
 
 schmlParser :: Parser L1
 schmlParser = id <$ whitespace <*> expParser <* whitespace <* eof

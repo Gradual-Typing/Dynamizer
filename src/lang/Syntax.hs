@@ -5,11 +5,9 @@ module Syntax where
 import Text.Parsec.Pos (SourcePos)
 
 type Name = String
-type Arg = (Name,Type)
-type Args = [Arg]
+--type Arg = (Name,Type)
+type Args = [Name]
 type Bind e = (Name,Type,e)
-type UBind e = (Name,e)
-type UBinds e = [UBind e]
 type Binds e = [Bind e]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt

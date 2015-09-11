@@ -27,10 +27,8 @@ instance Pretty e => Pretty (ExpF e) where
   ppe (If e1 e2 e3) = parens $ text "if" <+> ppe e1 <+> ppe e2 <+> ppe e3
   ppe (Var x) = text x
   ppe (App e1 es) = parens $ ppe e1 <+> hsep (map ppe es)
-  ppe (Lam args e t) = parens $ text "lambda" <+> parens (hsep $ map ppe args)
-                          <+> (case t of
-                                 Dyn -> ppe e
-                                 _ -> char ':' <+> ppe t <+> ppe e)
+  ppe (Lam args e) = parens $ text "lambda" <+> parens (hsep $ map ppe args)
+                     <+> ppe e
   ppe (GRef e) = parens $ text "gbox" <+> ppe e
   ppe (GDeRef e) = parens $ text "gunbox" <+> ppe e
   ppe (GAssign e1 e2) = parens $ text "gbox-set!" <+> ppe e1 <+> ppe e2
@@ -57,9 +55,6 @@ instance Pretty e => Pretty (Bind e) where
                             Dyn ->  text x <+> ppe e
                             _ -> text x <+> char ':' <+> ppe t <+> ppe e)
 
-instance {-# OVERLAPPABLE #-} Pretty e => Pretty (UBind e) where
-  ppe (x,e) = brackets (text x <+> ppe e)
-
 instance Pretty Operator where
   ppe Plus = char '+'
   ppe Minus = char '-'
@@ -75,10 +70,10 @@ instance Pretty Operator where
   ppe BAnd = text "binary-and"
   ppe BOr = text "binary-or"
 
-instance Pretty Arg where
-  ppe (x,t) = case t of
-    Dyn -> text x
-    _ -> brackets $ text x <+> char ':' <+> ppe t
+-- instance Pretty Arg where
+--   ppe (x,t) = case t of
+--     Dyn -> text x
+--     _ -> brackets $ text x <+> char ':' <+> ppe t
 
 instance Pretty Bool where
   ppe True = text "#t"

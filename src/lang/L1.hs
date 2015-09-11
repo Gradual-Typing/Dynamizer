@@ -15,7 +15,7 @@ data ExpF e =
   | If e e e
   | Var Name
   | App e [e]
-  | Lam Args e Type
+  | Lam Args e
   | GRef e
   | GDeRef e
   | GAssign e e
@@ -29,7 +29,7 @@ data ExpF e =
   | MVectRef e e
   | MVectSet e e e
   | Let (Binds e) e
-  | Letrec (UBinds e) e
+  | Letrec (Binds e) e
   | As e Type
   | Begin [e] e
   | Repeat Name e e e -- int int e
