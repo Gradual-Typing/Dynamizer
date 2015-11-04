@@ -67,12 +67,10 @@ integer = do
 op2Parser :: String -> Operator -> Parser L1
 op2Parser s op = do
   src <- getPosition
-  char '('
   try $ string s
   e1 <- expParser
   whitespace
   e2 <- expParser
-  char ')'
   return $ Ann src $ Op op [e1, e2]
 
 c1Parser :: String -> (L1 -> ExpF (Ann SourcePos ExpF)) -> Parser L1
@@ -109,21 +107,14 @@ idParser = try $ do
     then unexpected ("reserved word " ++ show name)
     else return name
 
-argParser :: Parser Name
-argParser = idParser
-
--- tyArgParser :: Parser Arg
--- tyArgParser = do
---   char '['
---   x <- idParser
---   string " : "
---   t <- typeParser
---   char ']'
---   return (x,t)
+argParser :: Parser (Name,Type)
+argParser =
+  (,) <$ char '[' <*> idParser <* string " : " <*> typeParser <* char ']'
+  <|> (\d -> (d,Dyn)) <$> idParser
 
 bindParser :: Parser (Bind L1)
 bindParser = do
-  char '[' <|> char '('
+  c <- char '[' <|> char '('
   x <- idParser
   whitespace
   char ':'
@@ -131,7 +122,7 @@ bindParser = do
   t <- typeParser
   whitespace
   e <- expParser
-  char ']' <|> char ')'
+  if c == '[' then char ']' else char ')'
   return (x,t,e)
 
 ifParser,varParser,appParser,opsParser,intParser,boolParser
@@ -164,19 +155,19 @@ appParser = do
   char ')'
   return $ Ann src $ App e es
 
-opsParser = op2Parser "+ " Plus
-            <|> op2Parser "- " Minus
-            <|> op2Parser "* " Mult
-            <|> op2Parser "%/ " Div
-            <|> op2Parser "= " Eq
-            <|> op2Parser ">= " Ge
-            <|> op2Parser "> " Gt
-            <|> op2Parser "<= " Le
-            <|> op2Parser "< " Lt
-            <|> op2Parser "%>> " ShiftR
-            <|> op2Parser "%<< " ShiftL
-            <|> op2Parser "binary-and " BAnd
-            <|> op2Parser "binary-or " BOr
+opsParser = try (op2Parser "+ " Plus)
+            <|> try (op2Parser "- " Minus)
+            <|> try (op2Parser "* " Mult)
+            <|> try (op2Parser "%/ " Div)
+            <|> try (op2Parser "= " Eq)
+            <|> try (op2Parser ">= " Ge)
+            <|> try (op2Parser "> " Gt)
+            <|> try (op2Parser "<= " Le)
+            <|> try (op2Parser "< " Lt)
+            <|> try (op2Parser "%>> " ShiftR)
+            <|> try (op2Parser "%<< " ShiftL)
+            <|> try (op2Parser "binary-and " BAnd)
+            <|> try (op2Parser "binary-or " BOr)
 
 intParser = annotate $ N <$> try integer
 
@@ -187,11 +178,13 @@ lambdaParser = do
   try $ string "lambda ("
   args <- sepEndBy argParser whitespace
   char ')'
-  -- string ") : "
-  --rt <- typeParser
   whitespace
+  rt <- optionMaybe (id <$ string ": " <*> typeParser <* whitespace)
   b <- expParser
-  return $ Ann src $ Lam args b
+  let ids = (map fst args)
+      t = FunTy $ map snd args
+    in return $ maybe (Ann src $ Lam ids b $ (t Dyn))
+       (\rt' -> Ann src $ Lam ids b $ (t rt')) rt
 
 letParser = do
   src <- getPosition
@@ -258,10 +251,10 @@ timer = (annotate $ TimerStart <$ try (string "(timer-start)"))
 
 expParser :: Parser L1
 expParser = intParser
-            <|> boolParser
-            <|> unitParser
+            <|> try (boolParser)
+            <|> try (unitParser)
             <|> try (parens ifParser)
-            <|> varParser
+            <|> try varParser
             <|> try (parens lambdaParser)
             <|> try (parens grefParser)
             <|> try (parens gderefParser)
@@ -280,8 +273,8 @@ expParser = intParser
             <|> try (parens asParser)
             <|> try (parens beginParser)
             <|> try (parens repeatParser)
+            <|> try (parens opsParser)
             <|> try timer
-            <|> try opsParser
             <|> try appParser
 
 -- Type Parsers
@@ -295,8 +288,12 @@ boolTyParser = BoolTy <$ try (string "Bool")
 dynTyParser = Dyn <$ try (string "Dyn")
 unitTyParser = UnitTy <$ try (string "()")
 funTyParser = do
-  ts <- parens $ sepEndBy typeParser (string " -> ")
-  return $ FunTy (init ts) (last ts)
+  char '('
+  ts <- sepEndBy typeParser whitespace
+  string "-> "
+  rt <- typeParser
+  char ')'
+  return $ FunTy ts rt
   
 grefTyParser = parens (GRefTy <$ try (string "GRef ") <*> typeParser)
 mrefTyParser = parens (MRefTy <$ try (string "MRef ") <*> typeParser)

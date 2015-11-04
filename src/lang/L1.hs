@@ -15,7 +15,7 @@ data ExpF e =
   | If e e e
   | Var Name
   | App e [e]
-  | Lam Args e
+  | Lam Args e Type
   | GRef e
   | GDeRef e
   | GAssign e e
