@@ -6,33 +6,28 @@
 
 module Annotizer where
 
-import Control.Arrow((***))
-import Control.Monad(join)
-import Data.List(foldl')
-
 import L1
   
 class Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
   lattice :: p -> [p]
-  -- Counts the number of all possible gradually-typed versions.
-  -- The total number of all variants should be equal to
-  -- 2^(number of all annotations) + number of complex types
-  count   :: p -> Integer
-  -- Counts the number of both all dynamic types and all types.
-  dynamic :: p -> (Int,Int) -> (Int,Int)
-  -- Counts the number of all static types.
-  static  :: p -> Double
-  static e = let (dyns,alls) = dynamic e (0,0)
-             in if alls > 0
-                then fromIntegral (alls - dyns) / fromIntegral alls
-                else 0
+  -- Counts the number of less percise programs and the number of
+  -- all type constructors
+  count   :: p -> (Integer,Int)
+  -- computes the percentage of dynamic code.
+  dynamic :: Int -> p -> Double
+  dynamic a e =
+    if a > 0
+    then fromIntegral (a - static e) / fromIntegral a
+    else 0
+  -- computes the number of type constructors.
+  static  :: p -> Int
 
 instance Gradual L1 where
   -- source information is not relevant
   lattice (Ann _ e)           = map (Ann undefined) $ lattice e
   count (Ann _ e)             = count e
-  dynamic (Ann _ e)           = dynamic e
+  static (Ann _ e)            = static e
 
 instance Gradual e => Gradual (ExpF e) where
   lattice (Op op es)          = Op op <$> mapM lattice es
@@ -61,59 +56,112 @@ instance Gradual e => Gradual (ExpF e) where
                                 <*> lattice e
   lattice e                   = [e]
 
-  count (Op _ es)             = product $ map count es
-  count (If e1 e2 e3)         = count e1 * count e2 * count e3
-  count (App e1 es)           = count e1* product (map count es)
-  count (Lam _ e t)           = count e * count t
+  count (Op _ es)             = let c = map count es
+                                in (product $ map fst c, sum $ map snd c)
+  count (If e1 e2 e3)         = let c1 = count e1
+                                    c2 = count e2
+                                    c3 = count e3
+                                in (fst c1 * fst c2 * fst c3,
+                                    snd c1 + snd c2 + snd c3)
+  count (App e1 es)           = let c1 = count e1
+                                    c = map count es
+                                in (fst c1 * product (map fst c),
+                                    snd c1 + sum (map snd c))
+  count (Lam _ e t)           = let c1 = count e
+                                    c2 = count t
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
   count (GRef e)              = count e
   count (GDeRef e)            = count e
-  count (GAssign e1 e2)       = count e1 * count e2
+  count (GAssign e1 e2)       = let c1 = count e1
+                                    c2 = count e2
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
   count (MRef e)              = count e
   count (MDeRef e)            = count e
-  count (MAssign e1 e2)       = count e1 * count e2
-  count (GVect e1 e2)         = count e1 * count e2
-  count (GVectRef e1 e2)      = count e1 * count e2
-  count (GVectSet e1 e2 e3)   = count e1 * count e2 * count e3
-  count (MVect e1 e2)         = count e1 * count e2
-  count (MVectRef e1 e2)      = count e1 * count e2
-  count (MVectSet e1 e2 e3)   = count e1 * count e2 * count e3
-  count (Let e1 e2)           = product (map count e1) * count e2
-  count (Letrec e1 e2)        = product (map count e1) * count e2
-  count (As e t)              = count e * count t
-  count (Begin e' e)          = product (map count e') * count e
-  count (Repeat _ e1 e2 e)    = count e1 * count e2 * count e
-  count _                     = 1
+  count (MAssign e1 e2)       = let c1 = count e1
+                                    c2 = count e2
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
+  count (GVect e1 e2)         = let c1 = count e1
+                                    c2 = count e2
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
+  count (GVectRef e1 e2)      = let c1 = count e1
+                                    c2 = count e2
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
+  count (GVectSet e1 e2 e3)   = let c1 = count e1
+                                    c2 = count e2
+                                    c3 = count e3
+                                in (fst c1 * fst c2 * fst c3,
+                                    snd c1 + snd c2 + snd c3)
+  count (MVect e1 e2)         = let c1 = count e1
+                                    c2 = count e2
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
+  count (MVectRef e1 e2)      = let c1 = count e1
+                                    c2 = count e2
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
+  count (MVectSet e1 e2 e3)   = let c1 = count e1
+                                    c2 = count e2
+                                    c3 = count e3
+                                in (fst c1 * fst c2 * fst c3,
+                                    snd c1 + snd c2 + snd c3)
+  count (Let e1 e2)           = let c1 = map count e1
+                                    c2 = count e2
+                                in (product (map fst c1) * fst c2,
+                                    sum (map snd c1) + snd c2)
+  count (Letrec e1 e2)        = let c1 = map count e1
+                                    c2 = count e2
+                                in (product (map fst c1) * fst c2,
+                                    sum (map snd c1) + snd c2)
+  count (As e t)              = let c1 = count e
+                                    c2 = count t
+                                in (fst c1 * fst c2,
+                                    snd c1 + snd c2)
+  count (Begin e' e)          = let c1 = map count e'
+                                    c2 = count e
+                                in (product (map fst c1) * fst c2,
+                                    sum (map snd c1) + snd c2)
+  count (Repeat _ e1 e2 e3)   = let c1 = count e1
+                                    c2 = count e2
+                                    c3 = count e3
+                                in (fst c1 * fst c2 * fst c3,
+                                    snd c1 + snd c2 + snd c3)
+  count _                     = (1,0)
 
-  dynamic (Op _ es)           = foldP es
-  dynamic (If e1 e2 e3)       = foldP [e1,e2,e3]
-  dynamic (App e1 es)         = foldP (e1:es)
-  dynamic (Lam _ e t)         = dynamic t . dynamic e
-  dynamic (GRef e)            = dynamic e
-  dynamic (GDeRef e)          = dynamic e
-  dynamic (GAssign e1 e2)     = foldP [e1,e2]
-  dynamic (MRef e)            = dynamic e
-  dynamic (MDeRef e)          = dynamic e
-  dynamic (MAssign e1 e2)     = foldP [e1,e2]
-  dynamic (GVect e1 e2)       = foldP [e1,e2]
-  dynamic (GVectRef e1 e2)    = foldP [e1,e2]
-  dynamic (GVectSet e1 e2 e3) = foldP [e1,e2,e3]
-  dynamic (MVect e1 e2)       = foldP [e1,e2]
-  dynamic (MVectRef e1 e2)    = foldP [e1,e2]
-  dynamic (MVectSet e1 e2 e3) = foldP [e1,e2,e3]
-  dynamic (Let e1 e2)         = dynamic e2 . foldP e1
-  dynamic (Letrec e1 e2)      = dynamic e2 . foldP e1
-  dynamic (As e t)            = dynamic t . dynamic e
-  dynamic (Begin e' e)        = dynamic e . foldP e'
-  dynamic (Repeat _ e1 e2 e)  = foldP [e1,e2,e]
-  dynamic _                   = id
-
-foldP :: Gradual a => [a] -> (Int,Int) -> (Int,Int)
-foldP = flip $ foldl' $ flip dynamic
+  static (Op _ es)           = sum (map static es)
+  static (If e1 e2 e3)       = static e1 + static e2 + static e3
+  static (App e1 es)         = static e1 + sum (map static es)
+  static (Lam _ e t)         = static t + static e
+  static (GRef e)            = static e
+  static (GDeRef e)          = static e
+  static (GAssign e1 e2)     = static e1 + static e2
+  static (MRef e)            = static e
+  static (MDeRef e)          = static e
+  static (MAssign e1 e2)     = static e1 + static e2
+  static (GVect e1 e2)       = static e1 + static e2
+  static (GVectRef e1 e2)    = static e1 + static e2
+  static (GVectSet e1 e2 e3) = static e1 + static e2 + static e3
+  static (MVect e1 e2)       = static e1 + static e2
+  static (MVectRef e1 e2)    = static e1 + static e2
+  static (MVectSet e1 e2 e3) = static e1 + static e2 + static e3
+  static (Let e1 e2)         = sum (map static e1) + static e2
+  static (Letrec e1 e2)      = sum (map static e1) + static e2
+  static (As e t)            = static t + static e
+  static (Begin e' e)        = static e + sum (map static e')
+  static (Repeat _ e1 e2 e3) = static e1 + static e2 + static e3
+  static _                   = 0
 
 instance Gradual e => Gradual (Bind e) where
   lattice (x,t,e) = (x,,) <$> lattice t <*> lattice e
-  count (_,t,e)   =  count t * count e
-  dynamic (_,t,e) = dynamic e . dynamic t
+  count (_,t,e)   =  let c1 = count e
+                         c2 = count t
+                     in (fst c1 * fst c2,
+                         snd c1 + snd c2)
+  static (_,t,e) = static e + static t
 
 instance Gradual Type where
   lattice (GRefTy t)    = Dyn:(GRefTy <$> lattice t)
@@ -121,20 +169,29 @@ instance Gradual Type where
   lattice (GVectTy t)   = Dyn:(GVectTy <$> lattice t)
   lattice (MVectTy t)   = Dyn:(MVectTy <$> lattice t)
   lattice (FunTy t1 t2) = Dyn:(FunTy <$> mapM lattice t1 <*> lattice t2)
+  lattice (ArrTy t1 t2) = ArrTy <$> mapM lattice t1 <*> lattice t2
   lattice Dyn           = [Dyn]
   lattice t             = [t,Dyn]
 
-  count (GRefTy t)      = count t + 1
-  count (MRefTy t)      = count t + 1
-  count (GVectTy t)     = count t + 1
-  count (MVectTy t)     = count t + 1
-  count (FunTy t1 t2)   = (product (map count t1) * count t2) + 1
-  count _               = 2
+  count (GRefTy t)      = let c = count t in (fst c + 1, snd c + 1)
+  count (MRefTy t)      = let c = count t in (fst c + 1, snd c + 1)
+  count (GVectTy t)     = let c = count t in (fst c + 1, snd c + 1)
+  count (MVectTy t)     = let c = count t in (fst c + 1, snd c + 1)
+  count (FunTy t1 t2)   = let c1 = map count t1
+                              c2 = count t2
+                          in (1 + fst c2 * product (map fst c1),
+                              1 + snd c2 + sum (map snd c1))
+  count (ArrTy t1 t2)   = let c1 = map count t1
+                              c2 = count t2
+                          in (fst c2 * product (map fst c1),
+                              snd c2 + sum (map snd c1))
+  count _               = (2,1)
 
-  dynamic Dyn           = join (***) (+1)
-  dynamic (GRefTy t)    = dynamic t
-  dynamic (MRefTy t)    = dynamic t
-  dynamic (GVectTy t)   = dynamic t
-  dynamic (MVectTy t)   = dynamic t
-  dynamic (FunTy t1 t2) = foldP (t2:t1)
-  dynamic _             = id *** (+1)
+  static Dyn           = 0
+  static (GRefTy t)    = 1 + static t
+  static (MRefTy t)    = 1 + static t
+  static (GVectTy t)   = 1 + static t
+  static (MVectTy t)   = 1 + static t
+  static (FunTy t1 t2) = 1 + sum (map static (t2:t1))
+  static (ArrTy t1 t2) = sum (map static (t2:t1))
+  static _             = 1

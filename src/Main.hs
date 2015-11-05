@@ -29,8 +29,12 @@ process d f s =
   let r = parser s in
   case r of
     Left err -> print err
-    Right e -> putStrLn ("There are " ++ show (count e) ++ " variants!")
-               >> when (f == "g") (writeLattice d (map (codeGen &&& static) $ lattice e))
+    Right e -> let (a,b) = count e
+               in putStrLn ("There are " ++ show a ++
+                            " less percisely typed programs and " ++
+                            show b ++ " type constructors")
+                  >> when (f == "g")
+                  (writeLattice d (map (codeGen &&& dynamic b) $ lattice e))
 
 processFile :: String -> String -> IO ()
 processFile f n = readFile (n ++ ".schml") >>= process (n ++ "/") f

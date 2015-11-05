@@ -181,8 +181,8 @@ lambdaParser = do
   whitespace
   rt <- optionMaybe (id <$ string ": " <*> typeParser <* whitespace)
   b <- expParser
-  let ids = (map fst args)
-      t = FunTy $ map snd args
+  let ids = map fst args
+      t = ArrTy (map snd args)
     in return $ maybe (Ann src $ Lam ids b $ (t Dyn))
        (\rt' -> Ann src $ Lam ids b $ (t rt')) rt
 

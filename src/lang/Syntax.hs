@@ -20,11 +20,12 @@ data Type =
   | BoolTy
   | UnitTy
   | FunTy [Type] Type
+  | ArrTy [Type] Type
   | GRefTy Type
   | MRefTy Type
   | GVectTy Type
   | MVectTy Type
-  deriving (Eq)
+  deriving (Eq,Show)
 
 newtype Fix e = In {out::e (Fix e)}
 
