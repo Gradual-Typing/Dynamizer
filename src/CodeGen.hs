@@ -4,7 +4,8 @@
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module CodeGen (
-  codeGen
+  codeGen,
+  Pretty(..)
   ) where
 
 import Text.PrettyPrint
@@ -95,11 +96,11 @@ instance Pretty Type where
   ppe BoolTy       = text "Bool"
   ppe UnitTy       = text "()"
   ppe (FunTy ts t) = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
-  ppe (ArrTy _ _)  = undefined
+  ppe (ArrTy _ _)  = error "arrow type should not be prettied"
   ppe (GRefTy t)   = parens $ text "GRef" <+> ppe t
   ppe (MRefTy t)   = parens $ text "MRef" <+> ppe t
   ppe (GVectTy t)  = parens $ text "GVect" <+> ppe t
   ppe (MVectTy t)  = parens $ text "MVect" <+> ppe t
 
-codeGen :: L1 -> String
+codeGen :: Pretty p => p -> String
 codeGen = render . ppe

@@ -6,6 +6,8 @@
 
 module Annotizer where
 
+import Control.Arrow((***))
+
 import L1
   
 class Gradual p where
@@ -33,7 +35,7 @@ instance Gradual e => Gradual (ExpF e) where
   lattice (Op op es)          = Op op <$> mapM lattice es
   lattice (If e1 e2 e3)       = If <$> lattice e1 <*> lattice e2 <*> lattice e3
   lattice (App e1 es)         = App <$> lattice e1 <*> mapM lattice es 
-  lattice (Lam args e t)      = (Lam args) <$> lattice e <*> lattice t
+  lattice (Lam args e t)      = Lam args <$> lattice e <*> lattice t
   lattice (GRef e)            = GRef <$> lattice e
   lattice (GDeRef e)          = GDeRef <$> lattice e
   lattice (GAssign e1 e2)     = GAssign <$> lattice e1 <*> lattice e2
@@ -61,75 +63,60 @@ instance Gradual e => Gradual (ExpF e) where
   count (If e1 e2 e3)         = let c1 = count e1
                                     c2 = count e2
                                     c3 = count e3
-                                in (fst c1 * fst c2 * fst c3,
-                                    snd c1 + snd c2 + snd c3)
+                                in  ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
   count (App e1 es)           = let c1 = count e1
                                     c = map count es
                                 in (fst c1 * product (map fst c),
                                     snd c1 + sum (map snd c))
   count (Lam _ e t)           = let c1 = count e
                                     c2 = count t
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (GRef e)              = count e
   count (GDeRef e)            = count e
   count (GAssign e1 e2)       = let c1 = count e1
                                     c2 = count e2
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (MRef e)              = count e
   count (MDeRef e)            = count e
   count (MAssign e1 e2)       = let c1 = count e1
                                     c2 = count e2
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (GVect e1 e2)         = let c1 = count e1
                                     c2 = count e2
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (GVectRef e1 e2)      = let c1 = count e1
                                     c2 = count e2
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (GVectSet e1 e2 e3)   = let c1 = count e1
                                     c2 = count e2
                                     c3 = count e3
-                                in (fst c1 * fst c2 * fst c3,
-                                    snd c1 + snd c2 + snd c3)
+                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
   count (MVect e1 e2)         = let c1 = count e1
                                     c2 = count e2
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (MVectRef e1 e2)      = let c1 = count e1
                                     c2 = count e2
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (MVectSet e1 e2 e3)   = let c1 = count e1
                                     c2 = count e2
                                     c3 = count e3
-                                in (fst c1 * fst c2 * fst c3,
-                                    snd c1 + snd c2 + snd c3)
+                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
   count (Let e1 e2)           = let c1 = map count e1
                                     c2 = count e2
-                                in (product (map fst c1) * fst c2,
-                                    sum (map snd c1) + snd c2)
+                                in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
   count (Letrec e1 e2)        = let c1 = map count e1
                                     c2 = count e2
-                                in (product (map fst c1) * fst c2,
-                                    sum (map snd c1) + snd c2)
+                                in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
   count (As e t)              = let c1 = count e
                                     c2 = count t
-                                in (fst c1 * fst c2,
-                                    snd c1 + snd c2)
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (Begin e' e)          = let c1 = map count e'
                                     c2 = count e
-                                in (product (map fst c1) * fst c2,
-                                    sum (map snd c1) + snd c2)
+                                in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
   count (Repeat _ e1 e2 e3)   = let c1 = count e1
                                     c2 = count e2
                                     c3 = count e3
-                                in (fst c1 * fst c2 * fst c3,
-                                    snd c1 + snd c2 + snd c3)
+                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
   count _                     = (1,0)
 
   static (Op _ es)           = sum (map static es)
@@ -159,8 +146,7 @@ instance Gradual e => Gradual (Bind e) where
   lattice (x,t,e) = (x,,) <$> lattice t <*> lattice e
   count (_,t,e)   =  let c1 = count e
                          c2 = count t
-                     in (fst c1 * fst c2,
-                         snd c1 + snd c2)
+                     in ((*) (fst c1) *** (+) (snd c1)) c2
   static (_,t,e) = static e + static t
 
 instance Gradual Type where
@@ -171,7 +157,7 @@ instance Gradual Type where
   lattice (FunTy t1 t2) = Dyn:(FunTy <$> mapM lattice t1 <*> lattice t2)
   lattice (ArrTy t1 t2) = ArrTy <$> mapM lattice t1 <*> lattice t2
   lattice Dyn           = [Dyn]
-  lattice t             = [t,Dyn]
+  lattice t             = [Dyn,t]
 
   count (GRefTy t)      = let c = count t in (fst c + 1, snd c + 1)
   count (MRefTy t)      = let c = count t in (fst c + 1, snd c + 1)

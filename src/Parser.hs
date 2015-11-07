@@ -181,10 +181,8 @@ lambdaParser = do
   whitespace
   rt <- optionMaybe (id <$ string ": " <*> typeParser <* whitespace)
   b <- expParser
-  let ids = map fst args
-      t = ArrTy (map snd args)
-    in return $ maybe (Ann src $ Lam ids b $ (t Dyn))
-       (\rt' -> Ann src $ Lam ids b $ (t rt')) rt
+  let t = ArrTy (map snd args) in
+    return $ (Ann src . Lam (map fst args) b . maybe (t Dyn) t) rt
 
 letParser = do
   src <- getPosition
@@ -245,14 +243,14 @@ repeatParser = do
   b <- expParser
   return $ Ann src $ Repeat x start end b
 
-timer = (annotate $ TimerStart <$ try (string "(timer-start)"))
-        <|> (annotate $ TimerStop <$ try (string "(timer-stop)"))
-        <|> (annotate $ TimerReport <$ try (string "(timer-report)"))
+timer = annotate (TimerStart <$ try (string "(timer-start)"))
+        <|> annotate (TimerStop <$ try (string "(timer-stop)"))
+        <|> annotate (TimerReport <$ try (string "(timer-report)"))
 
 expParser :: Parser L1
 expParser = intParser
-            <|> try (boolParser)
-            <|> try (unitParser)
+            <|> try boolParser
+            <|> try unitParser
             <|> try (parens ifParser)
             <|> try varParser
             <|> try (parens lambdaParser)

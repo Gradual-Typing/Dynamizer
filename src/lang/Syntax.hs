@@ -12,7 +12,7 @@ type Binds e = [Bind e]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr
-                deriving (Eq)
+                deriving (Eq,Show)
 
 data Type =
   Dyn
