@@ -12,6 +12,12 @@ import Text.PrettyPrint
 
 import L1
 
+indent :: Doc -> Doc
+indent = nest 2
+
+vcat' :: [Doc] -> Doc
+vcat' = (foldr ($+$) empty)
+
 class Pretty p where
   ppe :: p -> Doc
 
@@ -26,18 +32,18 @@ instance Pretty e => Pretty (ExpF e) where
   ppe (B b)                  = ppe b
   ppe Unit                   = text "()"
   ppe (Op op es)             = parens $ ppe op <+> hsep (map ppe es)
-  ppe (If e1 e2 e3)          = parens $ text "if" <+> ppe e1 <+> ppe e2 <+> ppe e3
+  ppe (If e1 e2 e3)          = parens $ text "if" <+> ppe e1 $+$ (indent $ ppe e2) $+$ (indent $ ppe e3)
   ppe (Var x)                = text x
   ppe (App e1 es)            = parens $ ppe e1 <+> hsep (map ppe es)
-  ppe (Lam s e (ArrTy ts t)) = parens $ text "lambda" <+> parens
-                               (hsep ((\a -> \case
-                                          Dyn -> a
-                                          t' -> char '[' <+> a
-                                                <+> char ':'
-                                                <+> ppe t' <+> char ']')
-                                      <$> map ppe s <*> ts)) <+>
-                               if t == Dyn then ppe e
-                               else char ':' <+> ppe t <+> ppe e
+  ppe (Lam s e (ArrTy ts t)) = parens $ (text "lambda" <+> parens
+                                         (vcat' (zipWith (\a -> \case
+                                                            Dyn -> a
+                                                            t' -> lbrack <> a
+                                                                  <+> char ':'
+                                                                  <+> ppe t' <> rbrack)
+                                                (map ppe s) ts)) <+>
+                                         if t == Dyn then empty
+                                         else char ':' <+> ppe t) $+$ (indent $ ppe e)
   ppe (Lam _ _ t)            = error ("lambda with type other than arrow" ++ show t)
   ppe (GRef e)               = parens $ text "gbox" <+> ppe e
   ppe (GDeRef e)             = parens $ text "gunbox" <+> ppe e
@@ -53,14 +59,14 @@ instance Pretty e => Pretty (ExpF e) where
   ppe (MVectRef e1 e2)       = parens $ text "mvector-ref" <+> ppe e1 <+> ppe e2
   ppe (MVectSet e1 e2 e3)    = parens $ text "mvector-set!" <+> ppe e1 <+> ppe e2
                                <+> ppe e3
-  ppe (Let binds e)          = parens $ text "let" <+> parens (hsep $ map ppe binds)
-                               <+> ppe e
-  ppe (Letrec binds e)       = parens $ text "letrec"
-                               <+> parens (hsep $ map ppe binds) <+> ppe e
+  ppe (Let binds e)          = parens $ text "let" <+> parens (vcat' $ map ppe binds)
+                               $+$ (indent $ ppe e)
+  ppe (Letrec binds e)       = parens $ text "letrec" <+> parens (vcat' $ map ppe binds)
+                               $+$ (indent $ ppe e)
   ppe (As e t)               = parens $ ppe e <+> char ':' <+> ppe t
-  ppe (Begin es e)           = parens $ text "begin" <+> hsep (map ppe es) <+> ppe e
+  ppe (Begin es e)           = parens $ text "begin" $+$ (indent $ vcat' $ map ppe es) $+$ (indent $ ppe e)
   ppe (Repeat x e1 e2 e)     = parens $ text "repeat"
-                               <+> parens (text x <+> ppe e1 <+> ppe e2) <+> ppe e
+                               <+> parens (text x <+> ppe e1 <+> ppe e2) $+$ ppe e
   ppe TimerStart             = text "(timer-start)"
   ppe TimerStop              = text "(timer-stop)"
   ppe TimerReport            = text "(timer-report)"

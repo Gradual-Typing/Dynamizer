@@ -225,13 +225,15 @@ asParser = do
 
 beginParser = do
   src <- getPosition
-  try $ string "begin "
+  try $ string "begin"
+  whitespace
   es <- sepEndBy1 expParser whitespace
   return $ Ann src $ Begin (init es) $ last es
 
 repeatParser = do
   src <- getPosition
-  try $ string "repeat "
+  try $ string "repeat"
+  whitespace
   char '('
   x <- idParser
   whitespace
