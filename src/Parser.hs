@@ -23,7 +23,8 @@ reservedNames =
    "gvector-set!","if","lambda","let","letrec",
    "mbox","mbox-set!","munbox","mvector",
    "mvector-ref","mvector-set!","repeat",
-   "timer-report","timer-start","timer-stop"]
+   "timer-report","timer-start","timer-stop",
+   "read-int"]
 
 -- Utilities
 
@@ -129,7 +130,7 @@ ifParser,varParser,appParser,opsParser,intParser,boolParser
   ,lambdaParser,letParser,letrecParser,grefParser,gderefParser
   ,grefsetParser,mrefParser,mderefParser,mrefsetParser,gvectParser
   ,gvectrefParser,gvectsetParser,mvectParser,mvectrefParser
-  ,mvectsetParser,asParser,beginParser,repeatParser,timer
+  ,mvectsetParser,asParser,beginParser,repeatParser,misc
   ,unitParser:: Parser L1
 
 unitParser = Ann <$> getPosition <*> (Unit <$ try (string "()"))
@@ -245,9 +246,10 @@ repeatParser = do
   b <- expParser
   return $ Ann src $ Repeat x start end b
 
-timer = annotate (TimerStart <$ try (string "(timer-start)"))
+misc = annotate (TimerStart <$ try (string "(timer-start)"))
         <|> annotate (TimerStop <$ try (string "(timer-stop)"))
         <|> annotate (TimerReport <$ try (string "(timer-report)"))
+        <|> annotate (ReadInt <$ try (string "(read-int)"))
 
 expParser :: Parser L1
 expParser = intParser
@@ -274,7 +276,7 @@ expParser = intParser
             <|> try (parens beginParser)
             <|> try (parens repeatParser)
             <|> try (parens opsParser)
-            <|> try timer
+            <|> try misc
             <|> try appParser
 
 -- Type Parsers

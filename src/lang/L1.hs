@@ -33,7 +33,7 @@ data ExpF e =
   | As e Type
   | Begin [e] e
   | Repeat Name e e e -- int int e
-  | TimerStart | TimerStop | TimerReport
+  | TimerStart | TimerStop | TimerReport | ReadInt
   deriving (Eq)
 
 -- newtype Exp = Exp (Fix ExpF)

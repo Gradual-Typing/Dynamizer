@@ -37,13 +37,14 @@ instance Pretty e => Pretty (ExpF e) where
   ppe (App e1 es)            = parens $ ppe e1 <+> hsep (map ppe es)
   ppe (Lam s e (ArrTy ts t)) = parens $ (text "lambda" <+> parens
                                          (vcat' (zipWith (\a -> \case
-                                                            Dyn -> a
+                                                            --Dyn -> a
                                                             t' -> lbrack <> a
                                                                   <+> char ':'
                                                                   <+> ppe t' <> rbrack)
                                                 (map ppe s) ts)) <+>
-                                         if t == Dyn then empty
-                                         else char ':' <+> ppe t) $+$ (indent $ ppe e)
+                                         char ':' <+> ppe t) $+$ (indent $ ppe e)
+                                         -- if t == Dyn then empty
+                                         -- else 
   ppe (Lam _ _ t)            = error ("lambda with type other than arrow" ++ show t)
   ppe (GRef e)               = parens $ text "gbox" <+> ppe e
   ppe (GDeRef e)             = parens $ text "gunbox" <+> ppe e
@@ -70,11 +71,12 @@ instance Pretty e => Pretty (ExpF e) where
   ppe TimerStart             = text "(timer-start)"
   ppe TimerStop              = text "(timer-stop)"
   ppe TimerReport            = text "(timer-report)"
+  ppe ReadInt                = text "(read-int)"
 
 instance Pretty e => Pretty (Bind e) where
   ppe (x,t,e) =
     brackets (case t of
-                Dyn ->  text x <+> ppe e
+                --Dyn ->  text x <+> ppe e
                 _ -> text x <+> char ':' <+> ppe t <+> ppe e)
 
 instance Pretty Operator where
