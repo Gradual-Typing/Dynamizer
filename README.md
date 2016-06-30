@@ -11,22 +11,22 @@ gradual typing implemented by the Schml project.
 
 ## Run
 
-        $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension> dry
+        $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension>
 
 will print the number of all possible gradually-typed programs for this specific program, and the number of type nodes in it.
 
-        $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension>
+        $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension> n
 
-will generate all possible gradually-typed programs and write them in a directory with the same name of the original source code file beside that file.
+will generate all possible gradually-typed programs and sample n programs and write those in a directory with the same name of the original source code file beside that file.
 
-        $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension> <n1> <n2>
+<!--         $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension> <n1> <n2> -->
 
-will generate all possible gradually-typed programs and partition them into n1 bins, sampling n2 programs from each bin and write them as specified before.
+<!-- will generate all possible gradually-typed programs and partition them into n1 bins, sampling n2 programs from each bin and write them as specified before. -->
 
-        $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension> <n1> <n2> <n3>
+<!--         $ <stack bin directory>/nAnnotizer <path to the completely-annotated schml source code file without file extension> <n1> <n2> <n3> -->
 
-will generate all possible gradually-typed programs and sample n3 programs from programs with percentage of dynamic typing between n1 and n2.
+<!-- will generate all possible gradually-typed programs and sample n3 programs from programs with percentage of dynamic typing between n1 and n2. -->
 
 ## Issues
 
-It is known that it consumes huge memory. For instance a typical quick sort program can easily result in more than 26 million different gradually-typed versions, hence sampling is always preferred so you do not run out of inodes ;)
+It is known that it consumes huge memory. For instance a typical quick sort program can easily rsult in billions of different gradually-typed versions, hence sampling is always preferred so you do not run out of inodes and/or RAM ;)

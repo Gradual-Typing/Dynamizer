@@ -2,8 +2,6 @@ flags: {}
 packages:
 - '.'
 extra-deps:
-- data-interval-1.2.0
-- extended-reals-0.2.1.0
 - transformers-0.5.2.0
 - transformers-compat-0.5.1.4
-resolver: lts-5.18
+resolver: lts-6.1

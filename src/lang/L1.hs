@@ -2,12 +2,13 @@
 
 module L1(module Syntax
          ,ExpF(..)
+         ,ExpF1
          ,L1) where
 
 import Syntax
 
 -- base functor (two-level types trick)
-data ExpF e =
+data ExpF t e =
   N Integer
   | B Bool
   | Unit
@@ -15,7 +16,7 @@ data ExpF e =
   | If e e e
   | Var Name
   | App e [e]
-  | Lam Args e Type
+  | Lam Args e t
   | GRef e
   | GDeRef e
   | GAssign e e
@@ -30,11 +31,13 @@ data ExpF e =
   | MVectSet e e e
   | Let (Binds e) e
   | Letrec (Binds e) e
-  | As e Type
+  | As e t
   | Begin [e] e
   | Repeat Name e e e -- int int e
   | TimerStart | TimerStop | TimerReport | ReadInt
   deriving (Eq)
 
 -- newtype Exp = Exp (Fix ExpF)
-type L1 = L ExpF
+
+type ExpF1 = ExpF Type
+type L1 = L ExpF1

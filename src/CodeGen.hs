@@ -27,7 +27,7 @@ instance Pretty Name where
 instance Pretty L1 where
   ppe (Ann _ e) = ppe e
 
-instance Pretty e => Pretty (ExpF e) where
+instance Pretty e => Pretty (ExpF1 e) where
   ppe (N a)                  = integer a
   ppe (B b)                  = ppe b
   ppe Unit                   = text "()"
@@ -35,17 +35,19 @@ instance Pretty e => Pretty (ExpF e) where
   ppe (If e1 e2 e3)          = parens $ text "if" <+> ppe e1 $+$ (indent $ ppe e2) $+$ (indent $ ppe e3)
   ppe (Var x)                = text x
   ppe (App e1 es)            = parens $ ppe e1 <+> hsep (map ppe es)
-  ppe (Lam s e (ArrTy ts t)) = parens $ (text "lambda" <+> parens
-                                         (vcat' (zipWith (\a -> \case
-                                                            --Dyn -> a
-                                                            t' -> lbrack <> a
-                                                                  <+> char ':'
-                                                                  <+> ppe t' <> rbrack)
-                                                (map ppe s) ts)) <+>
-                                         char ':' <+> ppe t) $+$ (indent $ ppe e)
-                                         -- if t == Dyn then empty
-                                         -- else 
-  ppe (Lam _ _ t)            = error ("lambda with type other than arrow" ++ show t)
+  -- ppe (Lam s e (ArrTy ts t)) = parens $ (text "lambda" <+> parens
+  --                                        (vcat' (zipWith (\a -> \case
+  --                                                           --Dyn -> a
+  --                                                           t' -> lbrack <> a
+  --                                                                 <+> char ':'
+  --                                                                 <+> ppe t' <> rbrack)
+  --                                               (map ppe s) ts)) <+>
+  --                                        char ':' <+> ppe t) $+$ (indent $ ppe e)
+  --                                        -- if t == Dyn then empty
+  --                                        -- else
+  ppe (Lam s e _) = parens $ (text "lambda" <+> parens
+                                         (hsep (map ppe s))) $+$ (indent $ ppe e)
+  -- ppe (Lam _ _ t)            = error ("lambda with type other than arrow" ++ show t)
   ppe (GRef e)               = parens $ text "gbox" <+> ppe e
   ppe (GDeRef e)             = parens $ text "gunbox" <+> ppe e
   ppe (GAssign e1 e2)        = parens $ text "gbox-set!" <+> ppe e1 <+> ppe e2
@@ -77,7 +79,7 @@ instance Pretty e => Pretty (Bind e) where
   ppe (x,t,e) =
     brackets (case t of
                 --Dyn ->  text x <+> ppe e
-                _ -> text x <+> char ':' <+> ppe t <+> ppe e)
+                _ -> text x <+> char ':' <+> ppe t $+$ (indent $ ppe e))
 
 instance Pretty Operator where
   ppe Plus   = char '+'

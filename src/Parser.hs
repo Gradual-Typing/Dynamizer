@@ -14,6 +14,7 @@ import Text.Parsec.String (Parser)
 
 import L1
 
+
 -- sorted
 reservedNames :: [String]
 reservedNames =
@@ -74,14 +75,14 @@ op2Parser s op = do
   e2 <- expParser
   return $ Ann src $ Op op [e1, e2]
 
-c1Parser :: String -> (L1 -> ExpF (Ann SourcePos ExpF)) -> Parser L1
+c1Parser :: String -> (L1 -> ExpF1 (Ann SourcePos ExpF1)) -> Parser L1
 c1Parser s op = do
   src <- getPosition
   try (string s)
   e <- expParser
   return $ Ann src $ op e
 
-c2Parser :: String -> (L1 -> L1 -> ExpF (Ann SourcePos ExpF)) -> Parser L1
+c2Parser :: String -> (L1 -> L1 -> ExpF1 (Ann SourcePos ExpF1)) -> Parser L1
 c2Parser s op = do
   src <- getPosition
   try (string s)
@@ -90,7 +91,7 @@ c2Parser s op = do
   e2 <- expParser
   return $ Ann src $ op e1 e2
 
-c3Parser :: String -> (L1 -> L1 -> L1 -> ExpF (Ann SourcePos ExpF)) -> Parser L1
+c3Parser :: String -> (L1 -> L1 -> L1 -> ExpF1 (Ann SourcePos ExpF1)) -> Parser L1
 c3Parser s op = do
   src <- getPosition
   try (string s)

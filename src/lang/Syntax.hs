@@ -27,7 +27,7 @@ data Type =
   | MVectTy Type
   deriving (Eq,Show)
 
-newtype Fix e = In {out::e (Fix e)}
+-- newtype Fix e = In {out::e (Fix e)}
 
 -- data Ann a f x = Ann a (f x)
 data Ann a e = Ann a (e (Ann a e))
