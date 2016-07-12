@@ -17,12 +17,12 @@ countTypeLattice (Ann _ e) = countTypeLatticeExpF e
     countTypeLatticeExpF (Op _ es)           = concatMap countTypeLattice es
     countTypeLatticeExpF (If e1 e2 e3)       = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
     countTypeLatticeExpF (App e1 es)         = countTypeLattice e1 ++ concatMap countTypeLattice es
-    countTypeLatticeExpF (Lam _ e' _)       = countTypeLattice e'
-    countTypeLatticeExpF (GRef e')            = countTypeLattice e'
-    countTypeLatticeExpF (GDeRef e')          = countTypeLattice e'
+    countTypeLatticeExpF (Lam _ e' t)        = fromIntegral (fst $ count t):countTypeLattice e'
+    countTypeLatticeExpF (GRef e')           = countTypeLattice e'
+    countTypeLatticeExpF (GDeRef e')         = countTypeLattice e'
     countTypeLatticeExpF (GAssign e1 e2)     = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (MRef e')            = countTypeLattice e'
-    countTypeLatticeExpF (MDeRef e')          = countTypeLattice e'
+    countTypeLatticeExpF (MRef e')           = countTypeLattice e'
+    countTypeLatticeExpF (MDeRef e')         = countTypeLattice e'
     countTypeLatticeExpF (MAssign e1 e2)     = countTypeLattice e1 ++ countTypeLattice e2
     countTypeLatticeExpF (GVect e1 e2)       = countTypeLattice e1 ++ countTypeLattice e2
     countTypeLatticeExpF (GVectRef e1 e2)    = countTypeLattice e1 ++ countTypeLattice e2
@@ -32,9 +32,9 @@ countTypeLattice (Ann _ e) = countTypeLatticeExpF e
     countTypeLatticeExpF (MVectSet e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
     countTypeLatticeExpF (Let e1 e2)         = foldr ((++) . countTypeLatticeBind) [] e1 ++ countTypeLattice e2
     countTypeLatticeExpF (Letrec e1 e2)      = foldr ((++) . countTypeLatticeBind) [] e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (As e' t)            = countTypeLattice e' ++ [fromIntegral $ fst $ count t]
-    countTypeLatticeExpF (Begin e1 e2)        = concatMap countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (Repeat _ e1 e2 e3)  = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
+    countTypeLatticeExpF (As e' t)           = countTypeLattice e' ++ [fromIntegral $ fst $ count t]
+    countTypeLatticeExpF (Begin e1 e2)       = concatMap countTypeLattice e1 ++ countTypeLattice e2
+    countTypeLatticeExpF (Repeat _ e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
     countTypeLatticeExpF _ = []
 
     countTypeLatticeBind :: Bind L1 -> [Int]
@@ -62,9 +62,9 @@ pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
       let (e1',ns1) = pickExpF ns e1
           (es',ns') = pickExpFTraverse ns1 es
       in (App (Ann undefined e1') es',ns')
-    pickExpF ns (Lam x (Ann _ e') t) =
+    pickExpF (n:ns) (Lam x (Ann _ e') t) =
       let (e'',ns') = pickExpF ns e'
-      in (Lam x (Ann undefined e'') t,ns')
+      in (Lam x (Ann undefined e'') (lattice t !! n),ns')
     pickExpF ns (GRef (Ann _ e')) =
       let (e'',ns') = pickExpF ns e'
       in (GRef (Ann undefined e''), ns')
@@ -171,7 +171,7 @@ instance Gradual e => Gradual (ExpF1 e) where
   lattice (Op op es)          = Op op <$> mapM lattice es
   lattice (If e1 e2 e3)       = If <$> lattice e1 <*> lattice e2 <*> lattice e3
   lattice (App e1 es)         = App <$> lattice e1 <*> mapM lattice es 
-  lattice (Lam args e t)      = (\x-> Lam args x t) <$> lattice e
+  lattice (Lam args e t)      = (Lam args) <$> lattice e <*> lattice t
   lattice (GRef e)            = GRef <$> lattice e
   lattice (GDeRef e)          = GDeRef <$> lattice e
   lattice (GAssign e1 e2)     = GAssign <$> lattice e1 <*> lattice e2
@@ -204,10 +204,9 @@ instance Gradual e => Gradual (ExpF1 e) where
                                     c = map count es
                                 in (fst c1 * product (map fst c),
                                     snd c1 + sum (map snd c))
-  -- count (Lam _ e t)           = let c1 = count e
-  --                                   c2 = count t
-  --                               in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (Lam _ e _)           = count e
+  count (Lam _ e t)           = let c1 = count e
+                                    c2 = count t
+                                in ((*) (fst c1) *** (+) (snd c1)) c2
   count (GRef e)              = count e
   count (GDeRef e)            = count e
   count (GAssign e1 e2)       = let c1 = count e1
@@ -259,8 +258,7 @@ instance Gradual e => Gradual (ExpF1 e) where
   static (Op _ es)           = sum (map static es)
   static (If e1 e2 e3)       = static e1 + static e2 + static e3
   static (App e1 es)         = static e1 + sum (map static es)
-  -- static (Lam _ e t)         = static t + static e
-  static (Lam _ e _)         = static e
+  static (Lam _ e t)         = static t + static e
   static (GRef e)            = static e
   static (GDeRef e)          = static e
   static (GAssign e1 e2)     = static e1 + static e2
@@ -309,6 +307,7 @@ instance Gradual Type where
                               c2 = count t2
                           in (fst c2 * product (map fst c1),
                               snd c2 + sum (map snd c1))
+  count Dyn             = (1,1)
   count _               = (2,1)
 
   static Dyn           = 0

@@ -188,7 +188,9 @@ lambdaParser = do
 
 letParser = do
   src <- getPosition
-  try (string "let (")
+  try (string "let")
+  whitespace
+  string "("
   binds <- sepEndBy bindParser whitespace
   char ')'
   whitespace
@@ -197,7 +199,9 @@ letParser = do
 
 letrecParser = do
   src <- getPosition
-  try (string "letrec (")
+  try (string "letrec")
+  whitespace
+  string "("
   binds <- sepEndBy bindParser whitespace
   char ')'
   whitespace
