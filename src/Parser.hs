@@ -114,7 +114,7 @@ argParser =
   (,) <$ char '[' <*> idParser <* string " : " <*> typeParser <* char ']'
   <|> (\d -> (d,Dyn)) <$> idParser
 
-bindParser :: Parser (Bind L1)
+bindParser :: Parser (Bind L1 Type)
 bindParser = do
   c <- char '[' <|> char '('
   x <- idParser
@@ -132,9 +132,9 @@ ifParser,varParser,appParser,opsParser,intParser,boolParser
   ,grefsetParser,mrefParser,mderefParser,mrefsetParser,gvectParser
   ,gvectrefParser,gvectsetParser,mvectParser,mvectrefParser
   ,mvectsetParser,asParser,beginParser,repeatParser,misc
-  ,unitParser:: Parser L1
+  ,unitParser :: Parser L1
 
-unitParser = Ann <$> getPosition <*> (Unit <$ try (string "()"))
+unitParser = Ann <$> getPosition <*> ((P $ Unit) <$ try (string "()"))
 
 ifParser = do
   src <- getPosition
@@ -146,7 +146,7 @@ ifParser = do
   e3 <- expParser
   return $ Ann src $ If e1 e2 e3
 
-varParser = annotate $ Var <$> idParser
+varParser = annotate $ ((P . Var) <$> idParser)
 
 appParser = do
   src <- getPosition
@@ -171,9 +171,9 @@ opsParser = try (op2Parser "+ " Plus)
             <|> try (op2Parser "binary-and " BAnd)
             <|> try (op2Parser "binary-or " BOr)
 
-intParser = annotate $ N <$> try integer
+intParser = annotate $ (P . N) <$> try integer
 
-boolParser = annotate $ (\x -> B $ x == 't') <$ char '#' <*> (char 't' <|> char 'f')
+boolParser = annotate $ (\x -> (P . B) $ x == 't') <$ char '#' <*> (char 't' <|> char 'f')
 
 lambdaParser = do
   src <- getPosition
@@ -251,10 +251,10 @@ repeatParser = do
   b <- expParser
   return $ Ann src $ Repeat x start end b
 
-misc = annotate (TimerStart <$ try (string "(timer-start)"))
-        <|> annotate (TimerStop <$ try (string "(timer-stop)"))
-        <|> annotate (TimerReport <$ try (string "(timer-report)"))
-        <|> annotate (ReadInt <$ try (string "(read-int)"))
+misc = annotate ((P $ TimerStart) <$ try (string "(timer-start)"))
+        <|> annotate ((P $ TimerStop) <$ try (string "(timer-stop)"))
+        <|> annotate ((P $ TimerReport) <$ try (string "(timer-report)"))
+        <|> annotate ((P $ ReadInt) <$ try (string "(read-int)"))
 
 expParser :: Parser L1
 expParser = intParser

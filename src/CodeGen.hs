@@ -27,13 +27,19 @@ instance Pretty Name where
 instance Pretty L1 where
   ppe (Ann _ e) = ppe e
 
-instance Pretty e => Pretty (ExpF1 e) where
+instance Pretty Prim where
+  ppe (Var x)                = text x
+  ppe TimerStart             = text "(timer-start)"
+  ppe TimerStop              = text "(timer-stop)"
+  ppe TimerReport            = text "(timer-report)"
+  ppe ReadInt                = text "(read-int)"
   ppe (N a)                  = integer a
   ppe (B b)                  = ppe b
   ppe Unit                   = text "()"
+
+instance Pretty e => Pretty (ExpF1 e) where
   ppe (Op op es)             = parens $ ppe op <+> hsep (map ppe es)
   ppe (If e1 e2 e3)          = parens $ text "if" <+> ppe e1 $+$ (indent $ ppe e2) $+$ (indent $ ppe e3)
-  ppe (Var x)                = text x
   ppe (App e1 es)            = parens $ ppe e1 <+> hsep (map ppe es)
   ppe (Lam s e (ArrTy ts t)) = parens $ (text "lambda" <+> parens
                                          (vcat' (zipWith (\a -> \case
@@ -70,12 +76,9 @@ instance Pretty e => Pretty (ExpF1 e) where
   ppe (Begin es e)           = parens $ text "begin" $+$ (indent $ vcat' $ map ppe es) $+$ (indent $ ppe e)
   ppe (Repeat x e1 e2 e)     = parens $ text "repeat"
                                <+> parens (text x <+> ppe e1 <+> ppe e2) $+$ ppe e
-  ppe TimerStart             = text "(timer-start)"
-  ppe TimerStop              = text "(timer-stop)"
-  ppe TimerReport            = text "(timer-report)"
-  ppe ReadInt                = text "(read-int)"
+  ppe (P p)                  = ppe p
 
-instance Pretty e => Pretty (Bind e) where
+instance (Pretty e,Pretty t) => Pretty (Bind e t) where
   ppe (x,t,e) =
     brackets (case t of
                 --Dyn ->  text x <+> ppe e

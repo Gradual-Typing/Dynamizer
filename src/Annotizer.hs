@@ -10,46 +10,77 @@ import Control.Arrow((***))
 
 import L1
 
-countTypeLattice :: L1 -> [Int]
-countTypeLattice (Ann _ e) = countTypeLatticeExpF e
+localLattice :: L1 -> L2
+localLattice (Ann _ e) = Ann undefined $ localLatticeExpF e
   where
-    countTypeLatticeExpF :: ExpF1 L1 -> [Int]
-    countTypeLatticeExpF (Op _ es)           = concatMap countTypeLattice es
-    countTypeLatticeExpF (If e1 e2 e3)       = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
-    countTypeLatticeExpF (App e1 es)         = countTypeLattice e1 ++ concatMap countTypeLattice es
-    countTypeLatticeExpF (Lam _ e' t)        = fromIntegral (fst $ count t):countTypeLattice e'
-    countTypeLatticeExpF (GRef e')           = countTypeLattice e'
-    countTypeLatticeExpF (GDeRef e')         = countTypeLattice e'
-    countTypeLatticeExpF (GAssign e1 e2)     = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (MRef e')           = countTypeLattice e'
-    countTypeLatticeExpF (MDeRef e')         = countTypeLattice e'
-    countTypeLatticeExpF (MAssign e1 e2)     = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (GVect e1 e2)       = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (GVectRef e1 e2)    = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (GVectSet e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
-    countTypeLatticeExpF (MVect e1 e2)       = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (MVectRef e1 e2)    = countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (MVectSet e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
-    countTypeLatticeExpF (Let e1 e2)         = foldr ((++) . countTypeLatticeBind) [] e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (Letrec e1 e2)      = foldr ((++) . countTypeLatticeBind) [] e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (As e' t)           = countTypeLattice e' ++ [fromIntegral $ fst $ count t]
-    countTypeLatticeExpF (Begin e1 e2)       = concatMap countTypeLattice e1 ++ countTypeLattice e2
-    countTypeLatticeExpF (Repeat _ e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
-    countTypeLatticeExpF _ = []
+    localLatticeExpF :: ExpF1 L1 -> ExpF2 L2
+    localLatticeExpF (Op op es)          = Op op $ map localLattice es
+    localLatticeExpF (If e1 e2 e3)       = If (localLattice e1) (localLattice e2) $ localLattice e3
+    localLatticeExpF (App e1 es)         = App (localLattice e1) $ map localLattice es
+    localLatticeExpF (Lam x e' t)        = Lam x (localLattice e') $ (lattice t,t)
+    localLatticeExpF (GRef e')           = GRef $ localLattice e'
+    localLatticeExpF (GDeRef e')         = GDeRef $ localLattice e'
+    localLatticeExpF (GAssign e1 e2)     = GAssign (localLattice e1) $ localLattice e2
+    localLatticeExpF (MRef e')           = MRef $ localLattice e'
+    localLatticeExpF (MDeRef e')         = MDeRef $ localLattice e'
+    localLatticeExpF (MAssign e1 e2)     = MAssign (localLattice e1) $ localLattice e2
+    localLatticeExpF (GVect e1 e2)       = GVect (localLattice e1) $ localLattice e2
+    localLatticeExpF (GVectRef e1 e2)    = GVectRef (localLattice e1) $ localLattice e2
+    localLatticeExpF (GVectSet e1 e2 e3) = GVectSet (localLattice e1) (localLattice e2) $ localLattice e3
+    localLatticeExpF (MVect e1 e2)       = MVect (localLattice e1) $ localLattice e2
+    localLatticeExpF (MVectRef e1 e2)    = MVectRef (localLattice e1) $ localLattice e2
+    localLatticeExpF (MVectSet e1 e2 e3) = MVectSet (localLattice e1) (localLattice e2) $ localLattice e3
+    localLatticeExpF (Let e1 e2)         = Let (map localLatticeBind e1) $ localLattice e2
+    localLatticeExpF (Letrec e1 e2)      = Letrec (map localLatticeBind e1) $ localLattice e2
+    localLatticeExpF (As e' t)           = As (localLattice e') $ (lattice t,t)
+    localLatticeExpF (Begin e1 e2)       = Begin (map localLattice e1) $ localLattice e2
+    localLatticeExpF (Repeat x e1 e2 e3) = Repeat x (localLattice e1) (localLattice e2) $ localLattice e3
+    localLatticeExpF (P p) = P p
 
-    countTypeLatticeBind :: Bind L1 -> [Int]
-    countTypeLatticeBind (_,t,e') = fromIntegral (fst $ count t):countTypeLattice e'
+    localLatticeBind :: Bind L1 Type -> Bind L2 ([Type],Type)
+    localLatticeBind (x,t,e') = (x,(lattice t,t),localLattice e')
 
-pick :: L1 -> [Int] -> L1
+fixType :: L2 -> L1
+fixType (Ann _ e) = Ann undefined $ fixTypeExpF e
+  where
+    fixTypeExpF :: ExpF2 L2 -> ExpF1 L1
+    fixTypeExpF (Op op es)          = Op op $ map fixType es
+    fixTypeExpF (If e1 e2 e3)       = If (fixType e1) (fixType e2) $ fixType e3
+    fixTypeExpF (App e1 es)         = App (fixType e1) $ map fixType es
+    fixTypeExpF (Lam x e' (_,t))        = Lam x (fixType e') t
+    fixTypeExpF (GRef e')           = GRef $ fixType e'
+    fixTypeExpF (GDeRef e')         = GDeRef $ fixType e'
+    fixTypeExpF (GAssign e1 e2)     = GAssign (fixType e1) $ fixType e2
+    fixTypeExpF (MRef e')           = MRef $ fixType e'
+    fixTypeExpF (MDeRef e')         = MDeRef $ fixType e'
+    fixTypeExpF (MAssign e1 e2)     = MAssign (fixType e1) $ fixType e2
+    fixTypeExpF (GVect e1 e2)       = GVect (fixType e1) $ fixType e2
+    fixTypeExpF (GVectRef e1 e2)    = GVectRef (fixType e1) $ fixType e2
+    fixTypeExpF (GVectSet e1 e2 e3) = GVectSet (fixType e1) (fixType e2) $ fixType e3
+    fixTypeExpF (MVect e1 e2)       = MVect (fixType e1) $ fixType e2
+    fixTypeExpF (MVectRef e1 e2)    = MVectRef (fixType e1) $ fixType e2
+    fixTypeExpF (MVectSet e1 e2 e3) = MVectSet (fixType e1) (fixType e2) $ fixType e3
+    fixTypeExpF (Let e1 e2)         = Let (map fixTypeBind e1) $ fixType e2
+    fixTypeExpF (Letrec e1 e2)      = Letrec (map fixTypeBind e1) $ fixType e2
+    fixTypeExpF (As e' (_,t))           = As (fixType e') t
+    fixTypeExpF (Begin e1 e2)       = Begin (map fixType e1) $ fixType e2
+    fixTypeExpF (Repeat x e1 e2 e3) = Repeat x (fixType e1) (fixType e2) $ fixType e3
+    fixTypeExpF (P p) = P p
+
+    fixTypeBind :: Bind L2 ([Type],Type) -> Bind L1 Type
+    fixTypeBind (x,(_,t),e') = (x,t,fixType e')
+
+pick :: L2 -> [Int] -> L1
+pick e [] = fixType e
 pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
   where
-    pickExpFTraverse :: [Int] -> [L1] -> ([L1], [Int])
+    pickExpFTraverse :: [Int] -> [L2] -> ([L1], [Int])
     pickExpFTraverse ns [] = ([],ns)
     pickExpFTraverse ns (Ann _ p:ps) = let (p',ns') = pickExpF ns p
                                            (ps',ns'') = pickExpFTraverse ns' ps
                                        in (Ann undefined p':ps',ns'')
       
-    pickExpF :: [Int] -> ExpF1 L1 -> (ExpF1 L1, [Int])
+    pickExpF :: [Int] -> ExpF2 L2 -> (ExpF1 L1, [Int])
     pickExpF ns (Op f es) =
       let (es',ns') = pickExpFTraverse ns es
       in (Op f es',ns')
@@ -62,9 +93,9 @@ pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
       let (e1',ns1) = pickExpF ns e1
           (es',ns') = pickExpFTraverse ns1 es
       in (App (Ann undefined e1') es',ns')
-    pickExpF (n:ns) (Lam x (Ann _ e') t) =
+    pickExpF (n:ns) (Lam x (Ann _ e') (t,_)) =
       let (e'',ns') = pickExpF ns e'
-      in (Lam x (Ann undefined e'') (lattice t !! n),ns')
+      in (Lam x (Ann undefined e'') (t !! n),ns')
     pickExpF ns (GRef (Ann _ e')) =
       let (e'',ns') = pickExpF ns e'
       in (GRef (Ann undefined e''), ns')
@@ -119,9 +150,9 @@ pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
       let (e1',ns') = pickExpFBinds ns e1
           (e2',ns2) = pickExpF ns' e2
       in (Letrec e1' (Ann undefined e2'),ns2)
-    pickExpF (n:ns) (As (Ann _ e') t) =
+    pickExpF (n:ns) (As (Ann _ e') (t,_)) =
       let (e'',ns') = pickExpF ns e'
-      in (As (Ann undefined e'') (lattice t !! n),ns')
+      in (As (Ann undefined e'') (t !! n),ns')
     pickExpF ns (Begin e1 (Ann _ e2)) =
       let (e1',ns') = pickExpFTraverse ns e1
           (e2',ns2) = pickExpF ns' e2
@@ -131,15 +162,16 @@ pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
           (e2',ns2) = pickExpF ns1 e2
           (e3',ns3) = pickExpF ns2 e3
       in (Repeat i (Ann undefined e1') (Ann undefined e2') (Ann undefined e3'), ns3)
-    pickExpF ns e' = (e',ns)
+    pickExpF ns (P p) = (P p,ns)
+    pickExpF _ _ = error "internal error"
 
-    pickExpFBind :: [Int] -> Bind L1 -> (Bind L1,[Int])
-    pickExpFBind [] e' = (e',[])
-    pickExpFBind (n:ns) (x,t,Ann _ e') =
+    pickExpFBind :: [Int] -> Bind L2 ([Type],Type) -> (Bind L1 Type,[Int])
+    pickExpFBind [] _ = error "The list of indices can not be empty while there are still typed bindings"
+    pickExpFBind (n:ns) (x,(t,_),Ann _ e') =
       let (e'',ns') = pickExpF ns e'
-      in ((x, lattice t !! n, Ann undefined e''),ns')
+      in ((x, t !! n, Ann undefined e''),ns')
 
-    pickExpFBinds :: [Int] -> Binds L1 -> (Binds L1, [Int])
+    pickExpFBinds :: [Int] -> Binds L2 ([Type],Type) -> (Binds L1 Type, [Int])
     pickExpFBinds ns [] = ([],ns)
     pickExpFBinds ns (p:ps) = let (p',ns') = pickExpFBind ns p
                                   (ps',ns'') = pickExpFBinds ns' ps
@@ -160,12 +192,14 @@ class Gradual p where
     else 0
   -- computes the number of type constructors.
   static  :: p -> Int
+  countTypeLattice :: p -> [Int]
 
 instance Gradual L1 where
   -- source information is not relevant
   lattice (Ann _ e)           = map (Ann undefined) $ lattice e
   count (Ann _ e)             = count e
   static (Ann _ e)            = static e
+  countTypeLattice (Ann _ e)  = countTypeLattice e
 
 instance Gradual e => Gradual (ExpF1 e) where
   lattice (Op op es)          = Op op <$> mapM lattice es
@@ -278,12 +312,36 @@ instance Gradual e => Gradual (ExpF1 e) where
   static (Repeat _ e1 e2 e3) = static e1 + static e2 + static e3
   static _                   = 0
 
-instance Gradual e => Gradual (Bind e) where
+  countTypeLattice (Op _ es)           = concatMap countTypeLattice es
+  countTypeLattice (If e1 e2 e3)       = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
+  countTypeLattice (App e1 es)         = countTypeLattice e1 ++ concatMap countTypeLattice es
+  countTypeLattice (Lam _ e' t)        = fromIntegral (fst $ count t):countTypeLattice e'
+  countTypeLattice (GRef e')           = countTypeLattice e'
+  countTypeLattice (GDeRef e')         = countTypeLattice e'
+  countTypeLattice (GAssign e1 e2)     = countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (MRef e')           = countTypeLattice e'
+  countTypeLattice (MDeRef e')         = countTypeLattice e'
+  countTypeLattice (MAssign e1 e2)     = countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (GVect e1 e2)       = countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (GVectRef e1 e2)    = countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (GVectSet e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
+  countTypeLattice (MVect e1 e2)       = countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (MVectRef e1 e2)    = countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (MVectSet e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
+  countTypeLattice (Let e1 e2)         = foldr ((++) . countTypeLattice) [] e1 ++ countTypeLattice e2
+  countTypeLattice (Letrec e1 e2)      = foldr ((++) . countTypeLattice) [] e1 ++ countTypeLattice e2
+  countTypeLattice (As e' t)           = countTypeLattice e' ++ [fromIntegral $ fst $ count t]
+  countTypeLattice (Begin e1 e2)       = concatMap countTypeLattice e1 ++ countTypeLattice e2
+  countTypeLattice (Repeat _ e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
+  countTypeLattice _ = []
+
+instance (Gradual e, Gradual t) => Gradual (Bind e t) where
   lattice (x,t,e) = (x,,) <$> lattice t <*> lattice e
   count (_,t,e)   =  let c1 = count e
                          c2 = count t
                      in ((*) (fst c1) *** (+) (snd c1)) c2
-  static (_,t,e) = static e + static t
+  static (_,t,e)  = static e + static t
+  countTypeLattice (_,t,e') = fromIntegral (fst $ count t):countTypeLattice e'
 
 instance Gradual Type where
   lattice (GRefTy t)    = Dyn:(GRefTy <$> lattice t)
@@ -318,3 +376,5 @@ instance Gradual Type where
   static (FunTy t1 t2) = 1 + sum (map static (t2:t1))
   static (ArrTy t1 t2) = sum (map static (t2:t1))
   static _             = 1
+
+  countTypeLattice = undefined

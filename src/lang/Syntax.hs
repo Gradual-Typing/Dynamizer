@@ -7,8 +7,8 @@ import Text.Parsec.Pos (SourcePos)
 type Name = String
 --type Arg = (Name,Type)
 type Args = [Name]
-type Bind e = (Name,Type,e)
-type Binds e = [Bind e]
+type Bind e t = (Name,t,e)
+type Binds e t = [Bind e t]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr

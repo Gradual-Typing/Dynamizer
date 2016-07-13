@@ -9,39 +9,15 @@ import System.IO (openFile,hPutStrLn,IOMode(AppendMode),hClose)
 import System.Directory (createDirectoryIfMissing)
 import Control.Monad (foldM_)
 import Text.Printf (hPrintf)
-import Control.Arrow((&&&))
 import Data.List (transpose,nub,zipWith5)
 import System.Random
 import System.Random.TF (TFGen, seedTFGen)
-import Data.Conduit
-import qualified Data.Conduit.List as CL
-import Control.Monad.IO.Class (liftIO)
 
 
 import Parser
 import Annotizer
 import CodeGen
 import L1
-
-source :: Gradual p => p -> Source IO p
-source = CL.sourceList . lattice
-
-conduit :: (Gradual p, Pretty p) => Int -> Conduit p IO (Double,String)
-conduit !b = CL.map (dynamic b &&& codeGen)
-
-sink :: String -> Int -> [Integer] -> Sink (Double,String) IO ()
-sink _ _ [] = liftIO $ putStrLn "\ndone."
-sink dname n (i:xs) = do
-  CL.drop $ fromIntegral i
-  x <- await
-  case x of
-    Nothing -> return ()
-    Just (!d,!p) -> do
-      h <- liftIO $ openFile (dname ++ show n ++ ".schml") AppendMode
-      liftIO $ hPrintf h ";; %.2f %% \n" (100*d)
-      liftIO $ hPutStrLn h p
-      liftIO $ hClose h
-      sink dname (n+1) $ map (i-) xs
 
 parse :: String -> IO (Maybe (L1,Int))
 parse fn = do
@@ -79,5 +55,5 @@ main = do
       x <- parse fn
       case x of
         Nothing -> return ()
-        Just (e,w) -> writeLattice w (fn ++ "/") $ map (pick e) $ nub $ transpose $ zipWith5 (\n a b c d -> randomList (0,n-1) (read ns::Int) $ seedTFGen (a,b,c,d)) (countTypeLattice e) [0..] [11..] [22..] [33..]
+        Just (e,w) -> writeLattice w (fn ++ "/") $ map (pick $ localLattice e) $ nub $ transpose $ zipWith5 (\n a b c d -> randomList (0,n-1) (read ns::Int) $ seedTFGen (a,b,c,d)) (countTypeLattice e) [0..] [11..] [22..] [33..]
     _ -> print "Wrong number of arguments\n"
