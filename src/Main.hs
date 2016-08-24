@@ -1,6 +1,4 @@
-{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-
 
 module Main where
 

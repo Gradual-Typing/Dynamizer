@@ -17,7 +17,7 @@ localLattice (Ann _ e) = Ann undefined $ localLatticeExpF e
     localLatticeExpF (Op op es)          = Op op $ map localLattice es
     localLatticeExpF (If e1 e2 e3)       = If (localLattice e1) (localLattice e2) $ localLattice e3
     localLatticeExpF (App e1 es)         = App (localLattice e1) $ map localLattice es
-    localLatticeExpF (Lam x e' t)        = Lam x (localLattice e') $ (lattice t,t)
+    localLatticeExpF (Lam x e' t)        = Lam x (localLattice e') (lattice t,t)
     localLatticeExpF (GRef e')           = GRef $ localLattice e'
     localLatticeExpF (GDeRef e')         = GDeRef $ localLattice e'
     localLatticeExpF (GAssign e1 e2)     = GAssign (localLattice e1) $ localLattice e2
@@ -32,9 +32,11 @@ localLattice (Ann _ e) = Ann undefined $ localLatticeExpF e
     localLatticeExpF (MVectSet e1 e2 e3) = MVectSet (localLattice e1) (localLattice e2) $ localLattice e3
     localLatticeExpF (Let e1 e2)         = Let (map localLatticeBind e1) $ localLattice e2
     localLatticeExpF (Letrec e1 e2)      = Letrec (map localLatticeBind e1) $ localLattice e2
-    localLatticeExpF (As e' t)           = As (localLattice e') $ (lattice t,t)
+    localLatticeExpF (As e' t)           = As (localLattice e') (lattice t,t)
     localLatticeExpF (Begin e1 e2)       = Begin (map localLattice e1) $ localLattice e2
-    localLatticeExpF (Repeat x e1 e2 e3) = Repeat x (localLattice e1) (localLattice e2) $ localLattice e3
+    localLatticeExpF (Repeat x e1 e2 e3 a b c) =
+      Repeat x (localLattice e1) (localLattice e2) (localLattice e3) a (localLattice b) $ maybe Nothing (\t -> Just (lattice t,t)) c
+    localLatticeExpF (Time e')           = Time $ localLattice e'
     localLatticeExpF (P p) = P p
 
     localLatticeBind :: Bind L1 Type -> Bind L2 ([Type],Type)
@@ -64,7 +66,9 @@ fixType (Ann _ e) = Ann undefined $ fixTypeExpF e
     fixTypeExpF (Letrec e1 e2)      = Letrec (map fixTypeBind e1) $ fixType e2
     fixTypeExpF (As e' (_,t))           = As (fixType e') t
     fixTypeExpF (Begin e1 e2)       = Begin (map fixType e1) $ fixType e2
-    fixTypeExpF (Repeat x e1 e2 e3) = Repeat x (fixType e1) (fixType e2) $ fixType e3
+    fixTypeExpF (Repeat x e1 e2 e3 a b c) =
+      Repeat x (fixType e1) (fixType e2) (fixType e3) a (fixType b) $ fmap snd c
+    fixTypeExpF (Time e')           = Time $ fixType e'
     fixTypeExpF (P p) = P p
 
     fixTypeBind :: Bind L2 ([Type],Type) -> Bind L1 Type
@@ -157,11 +161,21 @@ pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
       let (e1',ns') = pickExpFTraverse ns e1
           (e2',ns2) = pickExpF ns' e2
       in (Begin e1' (Ann undefined e2'),ns2)
-    pickExpF ns (Repeat i (Ann _ e1) (Ann _ e2) (Ann _ e3))  =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-          (e3',ns3) = pickExpF ns2 e3
-      in (Repeat i (Ann undefined e1') (Ann undefined e2') (Ann undefined e3'), ns3)
+    pickExpF (n:ns) (Repeat i (Ann _ e1) (Ann _ e2) (Ann _ e3) a (Ann _ b) c) =
+      case c of
+        Nothing -> let (e1',ns1) = pickExpF ns e1
+                       (e2',ns2) = pickExpF ns1 e2
+                       (b',ns3) = pickExpF ns2 b
+                       (e3',ns4) = pickExpF ns3 e3
+                   in (Repeat i (Ann undefined e1') (Ann undefined e2') (Ann undefined e3') a (Ann undefined b') Nothing, ns4)
+        Just (t,_) -> let (e1',ns1) = pickExpF ns e1
+                          (e2',ns2) = pickExpF ns1 e2
+                          (b',ns3) = pickExpF ns2 b
+                          (e3',ns4) = pickExpF ns3 e3
+                      in (Repeat i (Ann undefined e1') (Ann undefined e2') (Ann undefined e3') a (Ann undefined b') (Just (t !! n)), ns4)
+    pickExpF ns (Time (Ann _ e')) =
+      let (e'',ns') = pickExpF ns e'
+      in (Time (Ann undefined e''), ns')
     pickExpF ns (P p) = (P p,ns)
     pickExpF _ _ = error "internal error"
 
@@ -205,7 +219,7 @@ instance Gradual e => Gradual (ExpF1 e) where
   lattice (Op op es)          = Op op <$> mapM lattice es
   lattice (If e1 e2 e3)       = If <$> lattice e1 <*> lattice e2 <*> lattice e3
   lattice (App e1 es)         = App <$> lattice e1 <*> mapM lattice es 
-  lattice (Lam args e t)      = (Lam args) <$> lattice e <*> lattice t
+  lattice (Lam args e t)      = Lam args <$> lattice e <*> lattice t
   lattice (GRef e)            = GRef <$> lattice e
   lattice (GDeRef e)          = GDeRef <$> lattice e
   lattice (GAssign e1 e2)     = GAssign <$> lattice e1 <*> lattice e2
@@ -224,8 +238,11 @@ instance Gradual e => Gradual (ExpF1 e) where
   lattice (Letrec e1 e2)      = Letrec <$> mapM lattice e1 <*> lattice e2
   lattice (As e t)            = As <$> lattice e <*> lattice t
   lattice (Begin e' e)        = Begin <$> mapM lattice e' <*> lattice e
-  lattice (Repeat i e1 e2 e)  = Repeat i <$> lattice e1 <*> lattice e2
-                                <*> lattice e
+  lattice (Repeat i e1 e2 e a b c)  =
+    case c of
+      Just t -> (\a1 a2 a3 a4 a5 -> Repeat i a1 a2 a3 a a4 (Just a5)) <$> lattice e1 <*> lattice e2 <*> lattice e <*> lattice b <*> lattice t
+      Nothing -> (\a1 a2 a3 a4 -> Repeat i a1 a2 a3 a a4 Nothing) <$> lattice e1 <*> lattice e2 <*> lattice e <*> lattice b
+  lattice (Time e)            = Time <$> lattice e
   lattice e                   = [e]
 
   count (Op _ es)             = let c = map count es
@@ -283,10 +300,13 @@ instance Gradual e => Gradual (ExpF1 e) where
   count (Begin e' e)          = let c1 = map count e'
                                     c2 = count e
                                 in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
-  count (Repeat _ e1 e2 e3)   = let c1 = count e1
-                                    c2 = count e2
-                                    c3 = count e3
-                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
+  count (Repeat _ e1 e2 e3 _ b c)   = let c1 = count e1
+                                          c2 = count e2
+                                          c3 = count e3
+                                          c4 = count b
+                                          c5 = maybe (1,0) count c
+                                      in ((*) (fst c1 * fst c2 * fst c3 * fst c4) *** (+) (snd c1 + snd c2 + snd c3 + snd c4)) c5
+  count (Time e)              = count e
   count _                     = (1,0)
 
   static (Op _ es)           = sum (map static es)
@@ -309,7 +329,8 @@ instance Gradual e => Gradual (ExpF1 e) where
   static (Letrec e1 e2)      = sum (map static e1) + static e2
   static (As e t)            = static t + static e
   static (Begin e' e)        = static e + sum (map static e')
-  static (Repeat _ e1 e2 e3) = static e1 + static e2 + static e3
+  static (Repeat _ e1 e2 e3 _ b c) = static e1 + static e2 + static e3 + static b + maybe 0 static c
+  static (Time e)            = static e
   static _                   = 0
 
   countTypeLattice (Op _ es)           = concatMap countTypeLattice es
@@ -332,7 +353,9 @@ instance Gradual e => Gradual (ExpF1 e) where
   countTypeLattice (Letrec e1 e2)      = foldr ((++) . countTypeLattice) [] e1 ++ countTypeLattice e2
   countTypeLattice (As e' t)           = countTypeLattice e' ++ [fromIntegral $ fst $ count t]
   countTypeLattice (Begin e1 e2)       = concatMap countTypeLattice e1 ++ countTypeLattice e2
-  countTypeLattice (Repeat _ e1 e2 e3) = countTypeLattice e1 ++ countTypeLattice e2 ++ countTypeLattice e3
+  countTypeLattice (Repeat _ e1 e2 e3 _ b c) =
+    countTypeLattice e1 ++ countTypeLattice e2 ++ [maybe (-1) (fromIntegral . fst . count) c] ++ countTypeLattice b ++ countTypeLattice e3
+  countTypeLattice (Time e')           = countTypeLattice e'
   countTypeLattice _ = []
 
 instance (Gradual e, Gradual t) => Gradual (Bind e t) where
@@ -377,4 +400,4 @@ instance Gradual Type where
   static (ArrTy t1 t2) = sum (map static (t2:t1))
   static _             = 1
 
-  countTypeLattice = undefined
+  countTypeLattice = error "countTypeLattice undefined over types"

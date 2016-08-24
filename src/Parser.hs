@@ -23,8 +23,7 @@ reservedNames =
    "gbox-set!","gunbox","gvector","gvector-ref",
    "gvector-set!","if","lambda","let","letrec",
    "mbox","mbox-set!","munbox","mvector",
-   "mvector-ref","mvector-set!","repeat",
-   "timer-report","timer-start","timer-stop",
+   "mvector-ref","mvector-set!","repeat","time",
    "read-int"]
 
 -- Utilities
@@ -132,9 +131,9 @@ ifParser,varParser,appParser,opsParser,intParser,boolParser
   ,grefsetParser,mrefParser,mderefParser,mrefsetParser,gvectParser
   ,gvectrefParser,gvectsetParser,mvectParser,mvectrefParser
   ,mvectsetParser,asParser,beginParser,repeatParser,misc
-  ,unitParser :: Parser L1
+  ,unitParser,timeParser :: Parser L1
 
-unitParser = Ann <$> getPosition <*> ((P $ Unit) <$ try (string "()"))
+unitParser = Ann <$> getPosition <*> (P Unit <$ try (string "()"))
 
 ifParser = do
   src <- getPosition
@@ -146,7 +145,7 @@ ifParser = do
   e3 <- expParser
   return $ Ann src $ If e1 e2 e3
 
-varParser = annotate $ ((P . Var) <$> idParser)
+varParser = annotate ((P . Var) <$> idParser)
 
 appParser = do
   src <- getPosition
@@ -181,7 +180,7 @@ lambdaParser = do
   args <- sepEndBy argParser whitespace
   char ')'
   whitespace
-  rt <- optionMaybe (id <$ string ": " <*> typeParser <* whitespace)
+  rt <- optionMaybe (id <$ char ':' <* whitespace <*> typeParser <* whitespace)
   b <- expParser
   let t = ArrTy (map snd args) in
     return $ (Ann src . Lam (map fst args) b . maybe (t Dyn) t) rt
@@ -208,6 +207,7 @@ letrecParser = do
   e <- expParser
   return $ Ann src $ Letrec binds e
 
+timeParser = c1Parser "time " Time
 grefParser = c1Parser "gbox " GRef
 gderefParser = c1Parser "gunbox " GDeRef
 grefsetParser = c2Parser "gbox-set! " GAssign
@@ -248,13 +248,17 @@ repeatParser = do
   end <- expParser
   char ')'
   whitespace
+  char '('
+  acci <- idParser
+  whitespace
+  acct <- optionMaybe (id <$ char ':' <* whitespace <*> typeParser <* whitespace)
+  acce <- expParser
+  char ')'
+  whitespace
   b <- expParser
-  return $ Ann src $ Repeat x start end b
+  return $ Ann src $ Repeat x start end b acci acce acct
 
-misc = annotate ((P $ TimerStart) <$ try (string "(timer-start)"))
-        <|> annotate ((P $ TimerStop) <$ try (string "(timer-stop)"))
-        <|> annotate ((P $ TimerReport) <$ try (string "(timer-report)"))
-        <|> annotate ((P $ ReadInt) <$ try (string "(read-int)"))
+misc = annotate (P ReadInt <$ try (string "(read-int)"))
 
 expParser :: Parser L1
 expParser = intParser
@@ -280,6 +284,7 @@ expParser = intParser
             <|> try (parens asParser)
             <|> try (parens beginParser)
             <|> try (parens repeatParser)
+            <|> try (parens timeParser)
             <|> try (parens opsParser)
             <|> try misc
             <|> try appParser

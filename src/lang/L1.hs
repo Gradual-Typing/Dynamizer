@@ -32,14 +32,12 @@ data ExpF t e =
   | Letrec (Binds e t) e
   | As e t
   | Begin [e] e
-  | Repeat Name e e e -- int int e
+  | Repeat Name e e e Name e (Maybe t) -- int int e
+  | Time e
   | P Prim
 
 data Prim =
   Var Name
-  | TimerStart
-  | TimerStop
-  | TimerReport
   | ReadInt
   | N Integer
   | B Bool

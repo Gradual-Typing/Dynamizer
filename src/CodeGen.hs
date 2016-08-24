@@ -16,7 +16,7 @@ indent :: Doc -> Doc
 indent = nest 2
 
 vcat' :: [Doc] -> Doc
-vcat' = (foldr ($+$) empty)
+vcat' = foldr ($+$) empty
 
 class Pretty p where
   ppe :: p -> Doc
@@ -29,9 +29,6 @@ instance Pretty L1 where
 
 instance Pretty Prim where
   ppe (Var x)                = text x
-  ppe TimerStart             = text "(timer-start)"
-  ppe TimerStop              = text "(timer-stop)"
-  ppe TimerReport            = text "(timer-report)"
   ppe ReadInt                = text "(read-int)"
   ppe (N a)                  = integer a
   ppe (B b)                  = ppe b
@@ -39,7 +36,7 @@ instance Pretty Prim where
 
 instance Pretty e => Pretty (ExpF1 e) where
   ppe (Op op es)             = parens $ ppe op <+> hsep (map ppe es)
-  ppe (If e1 e2 e3)          = parens $ text "if" <+> ppe e1 $+$ (indent $ ppe e2) $+$ (indent $ ppe e3)
+  ppe (If e1 e2 e3)          = parens $ text "if" <+> ppe e1 $+$ indent (ppe e2) $+$ indent (ppe e3)
   ppe (App e1 es)            = parens $ ppe e1 <+> hsep (map ppe es)
   ppe (Lam s e (ArrTy ts t)) = parens $ (text "lambda" <+> parens
                                          (vcat' (zipWith (\a -> \case
@@ -48,7 +45,7 @@ instance Pretty e => Pretty (ExpF1 e) where
                                                                   <+> char ':'
                                                                   <+> ppe t' <> rbrack)
                                                 (map ppe s) ts)) <+>
-                                         char ':' <+> ppe t) $+$ (indent $ ppe e)
+                                         char ':' <+> ppe t) $+$ indent (ppe e)
                                          -- if t == Dyn then empty
                                          -- else
   -- ppe (Lam s e _) = parens $ (text "lambda" <+> parens
@@ -69,20 +66,22 @@ instance Pretty e => Pretty (ExpF1 e) where
   ppe (MVectSet e1 e2 e3)    = parens $ text "mvector-set!" <+> ppe e1 <+> ppe e2
                                <+> ppe e3
   ppe (Let binds e)          = parens $ text "let" <+> parens (vcat' $ map ppe binds)
-                               $+$ (indent $ ppe e)
+                               $+$ indent (ppe e)
   ppe (Letrec binds e)       = parens $ text "letrec" <+> parens (vcat' $ map ppe binds)
-                               $+$ (indent $ ppe e)
+                               $+$ indent (ppe e)
   ppe (As e t)               = parens $ ppe e <+> char ':' <+> ppe t
-  ppe (Begin es e)           = parens $ text "begin" $+$ (indent $ vcat' $ map ppe es) $+$ (indent $ ppe e)
-  ppe (Repeat x e1 e2 e)     = parens $ text "repeat"
-                               <+> parens (text x <+> ppe e1 <+> ppe e2) $+$ ppe e
+  ppe (Begin es e)           = parens $ text "begin" $+$ indent (vcat' $ map ppe es) $+$ indent (ppe e)
+  ppe (Repeat x e1 e2 e a b c)     =
+    parens $ text "repeat" <+> parens (text x <+> ppe e1 <+> ppe e2) <+> parens (text a <+>
+                                                                                 (case c of
+                                                                                   Just t -> char ':' <+> ppe t
+                                                                                   _ -> empty) <+> ppe b) $+$ ppe e
+  ppe (Time e)               = parens $ text "time" <+> ppe e
   ppe (P p)                  = ppe p
 
 instance (Pretty e,Pretty t) => Pretty (Bind e t) where
   ppe (x,t,e) =
-    brackets (case t of
-                --Dyn ->  text x <+> ppe e
-                _ -> text x <+> char ':' <+> ppe t $+$ (indent $ ppe e))
+    brackets (text x <+> char ':' <+> ppe t $+$ indent (ppe e))
 
 instance Pretty Operator where
   ppe Plus   = char '+'
