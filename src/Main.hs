@@ -7,9 +7,13 @@ import System.IO (openFile,hPutStrLn,IOMode(AppendMode),hClose)
 import System.Directory (createDirectoryIfMissing)
 import Control.Monad (foldM_)
 import Text.Printf (hPrintf)
-import Data.List (transpose,nub,zipWith5)
+import Data.List (transpose,nub,zipWith5,elemIndices,sortBy)
+import Data.Function(on)
 import System.Random
+import System.Random.Shuffle(shuffle')
 import System.Random.TF (TFGen, seedTFGen)
+import Data.IntegerInterval(interval,IntegerInterval,lowerBound,upperBound,Extended(..))
+import Control.Monad.State.Lazy (evalState,runState)
 
 
 import Parser
@@ -40,6 +44,46 @@ writeLattice b dname dps =
             hClose h
             return (n+1)) 0 dps
 
+genSample:: Int -> [Int] -> L2 -> [L1]
+genSample ns tns e = map (pick e) $ nub $ transpose $ zipWith5 (\n a b c d -> randomList (0,n-1) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
+
+genIntervals :: Double -> Double -> [IntegerInterval]
+genIntervals n l = if n > 1
+                   then interval (Finite $ ceiling $ (n-1)*l,False) (f $ n*l,True):genIntervals (n-1) l
+                   else [interval (0,True) (f l,True)]
+  where f = Finite . floor
+
+-- program, # samples / bin, # bins
+sample :: Gradual p => p -> Int -> Double -> [[p]]
+sample prog nb b =
+  let (l,(_,m)) = runState (countTypeLattice prog) (0,0)
+      i         = genIntervals b $ fromIntegral m/b
+  in sampleMN prog l m i nb
+     
+  where
+    -- index,# of nodes,staticallity,lattice -> potential -> current -> generator -> desired min -> desired max -> types
+    sampleOne :: [(Int,Int,[Int],[Type])] -> Int -> Int -> TFGen -> Int -> Int -> [(Int,Type)]
+    sampleOne [] _ _ _ _ _ = []
+    sampleOne ((i,n,s,ts):l) p c g mn mx =
+      let p'       = p-n 
+          (c',g')  = randomR (max 0 (mn-p'-c),min n (mx-c)) g
+          sc       = elemIndices c' s
+      in if null sc || p <= 0
+         then []
+         else let (xi,g'') = randomR (0,length sc-1) g'
+              in (i,ts !! (sc !! xi)):sampleOne l p' (c'+c) g'' mn mx
+    
+    -- program -> info -> max # nodes -> interval -> # samples -> programs
+    sampleN :: Gradual p => p -> [(Int,Int,[Int],[Type])] -> Int -> IntegerInterval -> Int -> [p]
+    sampleN _ _ _ _ 0  = []
+    sampleN p l1 m i n = case (lowerBound i,upperBound i) of
+      (Finite lb,Finite ub) -> (evalState (replaceTypes p) $ sortBy (compare `on` fst) $ sampleOne (shuffle' l1 (length l1) (seedTFGen (0, 11, 22, 33))) m 0 (seedTFGen (0, 11, 22, 33)) (fromInteger lb) (fromInteger ub)):sampleN p l1 m i (n-1)
+      _ -> error "internal error: unsupported ranges"
+
+    sampleMN :: Gradual p => p -> [(Int,Int,[Int],[Type])] -> Int -> [IntegerInterval] -> Int -> [[p]]
+    sampleMN _ _ _ [] _ = [[]]
+    sampleMN p l1 m (i:is) n =  sampleN p l1 m i n:sampleMN p l1 m is n
+
 main :: IO ()
 main = do
   args <- getArgs
@@ -53,5 +97,11 @@ main = do
       x <- parse fn
       case x of
         Nothing -> return ()
-        Just (e,w) -> writeLattice w (fn ++ "/") $ map (pick $ localLattice e) $ nub $ transpose $ zipWith5 (\n a b c d -> randomList (0,n-1) (read ns::Int) $ seedTFGen (a,b,c,d)) (countTypeLattice e) [0..] [11..] [22..] [33..]
+        Just (e,w) -> writeLattice w (fn ++ "/") $ genSample (read ns::Int) (map (\(_,c,_,_)-> c) $ evalState (countTypeLattice e) (0,0)) (localLattice e)
+     -- path, number of samples in each bin, number of bins
+    [fn, ns, nb] -> do
+      x <- parse fn
+      case x of
+        Nothing -> return ()
+        Just (e,w) -> writeLattice w (fn ++ "/") $ concat $ sample e (read ns::Int) (read nb::Double)
     _ -> print "Wrong number of arguments\n"

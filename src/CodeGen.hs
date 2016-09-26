@@ -65,22 +65,19 @@ instance Pretty e => Pretty (ExpF1 e) where
   ppe (MVectRef e1 e2)       = parens $ text "mvector-ref" <+> ppe e1 <+> ppe e2
   ppe (MVectSet e1 e2 e3)    = parens $ text "mvector-set!" <+> ppe e1 <+> ppe e2
                                <+> ppe e3
-  ppe (Let binds e)          = parens $ text "let" <+> parens (vcat' $ map ppe binds)
+  ppe (Let (Binds binds) e)          = parens $ text "let" <+> parens (vcat' $ map ppe binds)
                                $+$ indent (ppe e)
-  ppe (Letrec binds e)       = parens $ text "letrec" <+> parens (vcat' $ map ppe binds)
+  ppe (Letrec (Binds binds) e)       = parens $ text "letrec" <+> parens (vcat' $ map ppe binds)
                                $+$ indent (ppe e)
   ppe (As e t)               = parens $ ppe e <+> char ':' <+> ppe t
   ppe (Begin es e)           = parens $ text "begin" $+$ indent (vcat' $ map ppe es) $+$ indent (ppe e)
-  ppe (Repeat x e1 e2 e a b c)     =
-    parens $ text "repeat" <+> parens (text x <+> ppe e1 <+> ppe e2) <+> parens (text a <+>
-                                                                                 (case c of
-                                                                                   Just t -> char ':' <+> ppe t
-                                                                                   _ -> empty) <+> ppe b) $+$ ppe e
+  ppe (Repeat x a e1 e2 e b t)     =
+    parens $ text "repeat" <+> parens (text x <+> ppe e1 <+> ppe e2) <+> parens (text a <+> (char ':' <+> ppe t) <+> ppe b) $+$ ppe e
   ppe (Time e)               = parens $ text "time" <+> ppe e
   ppe (P p)                  = ppe p
 
-instance (Pretty e,Pretty t) => Pretty (Bind e t) where
-  ppe (x,t,e) =
+instance (Pretty e,Pretty t) => Pretty (Bind t e) where
+  ppe (Bind x t e) =
     brackets (text x <+> char ':' <+> ppe t $+$ indent (ppe e))
 
 instance Pretty Operator where
@@ -108,7 +105,8 @@ instance Pretty Type where
   ppe BoolTy       = text "Bool"
   ppe UnitTy       = text "()"
   ppe (FunTy ts t) = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
-  ppe (ArrTy _ _)  = error "arrow type should not be prettied"
+  ppe (ArrTy ts t)  = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
+  -- error "arrow type should not be prettied"
   ppe (GRefTy t)   = parens $ text "GRef" <+> ppe t
   ppe (MRefTy t)   = parens $ text "MRef" <+> ppe t
   ppe (GVectTy t)  = parens $ text "GVect" <+> ppe t

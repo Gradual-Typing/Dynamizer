@@ -1,14 +1,16 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Syntax where
 
 import Text.Parsec.Pos (SourcePos)
+import Data.Functor.Foldable
+import Data.Functor.Compose
 
 type Name = String
---type Arg = (Name,Type)
 type Args = [Name]
-type Bind e t = (Name,t,e)
-type Binds e t = [Bind e t]
+data Bind t e = Bind Name t e
+newtype Binds t e = Binds [Bind t e]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr
@@ -33,3 +35,10 @@ data Type =
 data Ann a e = Ann a (e (Ann a e))
 
 type L a = Ann SourcePos a
+
+type AnnT a e = Fix (Compose ((,) a) e)
+
+foldAnn :: Functor e => (a -> e r -> r) -> Ann a e -> r
+foldAnn f (Ann a e) = f a (fmap (foldAnn f) e)
+
+-- pattern Ann a e = Fix (Compose (a,e))

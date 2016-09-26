@@ -113,7 +113,7 @@ argParser =
   (,) <$ char '[' <*> idParser <* string " : " <*> typeParser <* char ']'
   <|> (\d -> (d,Dyn)) <$> idParser
 
-bindParser :: Parser (Bind L1 Type)
+bindParser :: Parser (Bind Type L1)
 bindParser = do
   c <- char '[' <|> char '('
   x <- idParser
@@ -124,7 +124,7 @@ bindParser = do
   whitespace
   e <- expParser
   if c == '[' then char ']' else char ')'
-  return (x,t,e)
+  return (Bind x t e)
 
 ifParser,varParser,appParser,opsParser,intParser,boolParser
   ,lambdaParser,letParser,letrecParser,grefParser,gderefParser
@@ -194,7 +194,7 @@ letParser = do
   char ')'
   whitespace
   e <- expParser
-  return $ Ann src $ Let binds e
+  return $ Ann src $ Let (Binds binds) e
 
 letrecParser = do
   src <- getPosition
@@ -205,7 +205,7 @@ letrecParser = do
   char ')'
   whitespace
   e <- expParser
-  return $ Ann src $ Letrec binds e
+  return $ Ann src $ Letrec (Binds binds) e
 
 timeParser = c1Parser "time " Time
 grefParser = c1Parser "gbox " GRef
@@ -256,7 +256,7 @@ repeatParser = do
   char ')'
   whitespace
   b <- expParser
-  return $ Ann src $ Repeat x start end b acci acce acct
+  return $ Ann src $ Repeat x acci start end b acce (maybe Dyn id acct)
 
 misc = annotate (P ReadInt <$ try (string "(read-int)"))
 
