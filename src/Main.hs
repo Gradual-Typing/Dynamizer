@@ -21,6 +21,7 @@ import Annotizer
 import CodeGen
 import L1
 
+
 parse :: String -> IO (Maybe (L1,Int))
 parse fn = do
   p <- readFile (fn ++ ".schml")
@@ -44,6 +45,7 @@ writeLattice b dname dps =
             hClose h
             return (n+1)) 0 dps
 
+-- I am not happy with this sampling methodology for small programs
 genSample:: Int -> [Int] -> L2 -> [L1]
 genSample ns tns e = map (pick e) $ nub $ transpose $ zipWith5 (\n a b c d -> randomList (0,n-1) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
 

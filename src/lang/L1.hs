@@ -17,15 +17,22 @@ import Syntax
 -- structure operator
 data ExpF t e =
   Op Operator [e]
+  | TopLevelDefs (Defs t e) [e]
   | If e e e
   | App e [e]
   | Lam Args e t
+  | Ref e
+  | DeRef e
+  | Assign e e
   | GRef e
   | GDeRef e
   | GAssign e e
   | MRef e
   | MDeRef e
   | MAssign e e
+  | Vect e e -- length value
+  | VectRef e e -- vect pos
+  | VectSet e e e -- vect pos value
   | GVect e e -- length value
   | GVectRef e e -- vect pos
   | GVectSet e e e -- vect pos value
@@ -43,7 +50,9 @@ data ExpF t e =
 data Prim =
   Var Name
   | ReadInt
+  | ReadFloat
   | N Integer
+  | F Double String -- whether it is in scientific notation? has a leading #i?
   | B Bool
   | Unit
   deriving (Eq)
@@ -57,15 +66,22 @@ type L2 = L ExpF2
 
 instance Bifunctor ExpF where
   bimap _ g (Op op es)          = Op op $ map g es
+  bimap f g (TopLevelDefs d e)  = TopLevelDefs (bimap f g d) $ map g e
   bimap _ g (If e1 e2 e3)       = If (g e1) (g e2) $ g e3
   bimap _ g (App e1 es)         = App (g e1) $ map g es
   bimap f g (Lam args e t)      = Lam args (g e) $ f t
+  bimap _ g (Ref e)             = Ref $ g e
+  bimap _ g (DeRef e)           = DeRef $ g e
+  bimap _ g (Assign e1 e2)      = Assign (g e1) $ g e2
   bimap _ g (GRef e)            = GRef $ g e
   bimap _ g (GDeRef e)          = GDeRef $ g e
   bimap _ g (GAssign e1 e2)     = GAssign (g e1) $ g e2
   bimap _ g (MRef e)            = MRef $ g e
   bimap _ g (MDeRef e)          = MDeRef $ g e
   bimap _ g (MAssign e1 e2)     = MAssign (g e1) $ g e2
+  bimap _ g (Vect e1 e2)        = Vect (g e1) $ g e2
+  bimap _ g (VectRef e1 e2)     = VectRef (g e1) $ g e2
+  bimap _ g (VectSet e1 e2 e3)  = VectSet (g e1) (g e2) $ g e3
   bimap _ g (GVect e1 e2)       = GVect (g e1) $ g e2
   bimap _ g (GVectRef e1 e2)    = GVectRef (g e1) $ g e2
   bimap _ g (GVectSet e1 e2 e3) = GVectSet (g e1) (g e2) $ g e3
@@ -80,6 +96,13 @@ instance Bifunctor ExpF where
   bimap _ g (Time e)            = Time $ g e
   bimap _ _ (P p)               = P p
 
+
+instance Bifunctor Def where
+  bimap f g (DConst x t e) = DConst x (f t) $ g e
+  bimap f g (DLam x args e t) = DLam x args (g e) $ f t
+
+instance Bifunctor Defs where
+  bimap f g (Defs l) = Defs $ map (bimap f g) l
   
 instance Bifunctor Bind where
   bimap f g (Bind x t e) = Bind x (f t) $ g e
