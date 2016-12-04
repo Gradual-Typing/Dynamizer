@@ -430,7 +430,7 @@ funTyParser   = do
   return $ FunTy ts rt
 
 refTyParser   = RefTy <$ try (string "(Ref ") <*> typeParser <* char ')'
-vectTyParser  = VectTy <$ try (string "(Vector ") <*> typeParser <* char ')'
+vectTyParser  = VectTy <$ try (string "(Vect ") <*> typeParser <* char ')'
 grefTyParser  = GRefTy <$ try (string "(GRef ") <*> typeParser <* char ')'
 mrefTyParser  = MRefTy <$ try (string "(MRef ") <*> typeParser <* char ')'
 gvectTyParser = GVectTy <$ try (string "(GVect ") <*> typeParser <* char ')'
