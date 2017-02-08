@@ -119,7 +119,7 @@ specialChar :: Parser Char
 specialChar = fstSpecChar -- <|> oneOf "!"
 
 fstSpecChar :: Parser Char
-fstSpecChar = oneOf "_#%*+-!"
+fstSpecChar = oneOf "_#%*+-!^"
   
 idParser :: Parser String
 idParser = do
@@ -149,9 +149,9 @@ ifParser,varParser,appParser,opsParser,intParser,boolParser
    mderefParser,mrefsetParser,vectParser,vectrefParser,
    vectsetParser,gvectParser,gvectrefParser,
    gvectsetParser,mvectParser,mvectrefParser,mvectsetParser,asParser,
-   beginParser,repeatParser,misc,unitParser,timeParser,topLevParser,
-   floatParser :: Parser L1
-
+   beginParser,repeatParser,unitParser,timeParser,topLevParser,
+   floatParser,charParser :: Parser L1
+                             
 unitParser = Ann <$> getPosition <*> (P Unit <$ try (string "()"))
 
 floatParser = do
@@ -188,7 +188,8 @@ appParser = do
   char ')'
   return $ Ann src $ App e es
 
-op1Parser,op2Parser :: String -> Operator -> Parser L1
+op0Parser,op1Parser,op2Parser :: String -> Operator -> Parser L1
+op0Parser = opnParser 0
 op1Parser = opnParser 1
 op2Parser = opnParser 2
 
@@ -216,8 +217,8 @@ opsParser = op2Parser "+ " Plus
             <|> op2Parser "fl= " EqF
             <|> op2Parser "fl> " GtF
             <|> op2Parser "fl>= " GeF
-            <|> op1Parser "flmin " MinF
-            <|> op1Parser "flmax " MaxF
+            <|> op2Parser "flmin " MinF
+            <|> op2Parser "flmax " MaxF
             <|> op1Parser "flfloor " RoundF
             <|> op1Parser "flround " FloorF
             <|> op1Parser "flceiling " CeilingF
@@ -234,12 +235,17 @@ opsParser = op2Parser "+ " Plus
             <|> op2Parser "flexpt " ExptF
             <|> op1Parser "float->int " FloatToInt
             <|> op1Parser "int->float " IntToFloat
+            <|> op1Parser "char->int " CharToInt
+            <|> op0Parser "read-int" ReadInt
+            <|> op0Parser "read-float" ReadFloat
             
             
 
 intParser = annotate $ (P . N) <$> try integer
 
 boolParser = annotate $ (\x -> (P . B) $ x == 't') <$ char '#' <*> (char 't' <|> char 'f')
+
+charParser = annotate $ (P . C) <$ string "#\\" <*> (try (string "space") <|> try ((: []) <$> anyChar))
 
 lambdaParser = do
   src <- getPosition
@@ -364,20 +370,17 @@ repeatParser = do
   char ')'
   return $ Ann src $ Repeat x acci start end b acce acct
 
-misc =
-  annotate (P ReadInt <$ try (string "(read-int)"))
-  <|> annotate (P ReadFloat <$ try (string "(read-float)"))
-
 topLevParser = do
   src <- getPosition
   ds <- sepEndBy (dlamParser <|> dconstParser) whitespace
-  es <- sepEndBy1 expParser whitespace
+  es <- sepEndBy expParser whitespace
   return $ Ann src $ TopLevelDefs (Defs ds) es
 
 expParser :: Parser L1
 expParser = try floatParser
             <|> intParser
             <|> try boolParser
+            <|> try charParser
             <|> unitParser
             <|> try varParser
             <|> opsParser
@@ -407,27 +410,34 @@ expParser = try floatParser
             <|> asParser
             <|> beginParser
             <|> repeatParser
-            <|> misc
             <|> try appParser
 
 -- Type Parsers
 
 refTyParser,vectTyParser,grefTyParser,mrefTyParser,gvectTyParser
   ,mvectTyParser,intTyParser,boolTyParser,dynTyParser,unitTyParser
-  ,funTyParser,floatTyParser,typeParser :: Parser Type
+  ,funTyParser,floatTyParser,charTyParser,tupleTyParser,typeParser
+   :: Parser Type
 
-intTyParser   = IntTy <$ try (string "Int")
-floatTyParser = FloatTy <$ try (string "Float")
-boolTyParser  = BoolTy <$ try (string "Bool")
-dynTyParser   = Dyn <$ try (string "Dyn")
-unitTyParser  = UnitTy <$ try (string "()" <|> string "Unit")
-funTyParser   = do
+charTyParser   = CharTy <$ try (string "Char")
+intTyParser    = IntTy <$ try (string "Int")
+floatTyParser  = FloatTy <$ try (string "Float")
+boolTyParser   = BoolTy <$ try (string "Bool")
+dynTyParser    = Dyn <$ try (string "Dyn")
+unitTyParser   = UnitTy <$ try (string "()" <|> string "Unit")
+funTyParser    = do
   char '('
   ts <- sepEndBy typeParser whitespace
   string "-> "
   rt <- typeParser
   char ')'
   return $ FunTy ts rt
+  
+tupleTyParser = do
+  string "(Tuple "
+  ts <- sepEndBy typeParser whitespace
+  char ')'
+  return $ TupleTy ts
 
 refTyParser   = RefTy <$ try (string "(Ref ") <*> typeParser <* char ')'
 vectTyParser  = VectTy <$ try (string "(Vect ") <*> typeParser <* char ')'
@@ -436,7 +446,8 @@ mrefTyParser  = MRefTy <$ try (string "(MRef ") <*> typeParser <* char ')'
 gvectTyParser = GVectTy <$ try (string "(GVect ") <*> typeParser <* char ')'
 mvectTyParser = MVectTy <$ try (string "(MVect ") <*> typeParser <* char ')'
 
-typeParser = intTyParser
+typeParser = charTyParser
+             <|> intTyParser
              <|> floatTyParser
              <|> boolTyParser
              <|> dynTyParser
@@ -448,6 +459,7 @@ typeParser = intTyParser
              <|> mrefTyParser
              <|> gvectTyParser
              <|> mvectTyParser
+             <|> tupleTyParser
 
 schmlParser :: Parser L1
 schmlParser = id <$ whitespace <*> topLevParser <* whitespace <* eof

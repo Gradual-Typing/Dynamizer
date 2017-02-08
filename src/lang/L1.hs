@@ -1,3 +1,7 @@
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveFoldable #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module L1(module Syntax
@@ -47,14 +51,31 @@ data ExpF t e =
   | Time e
   | P Prim
 
+deriving instance Functor (ExpF t)
+deriving instance Functor (Defs t)
+deriving instance Functor (Def t)
+deriving instance Functor (Binds t)
+deriving instance Functor (Bind t)
+
+deriving instance Foldable (ExpF t)
+deriving instance Foldable (Defs t)
+deriving instance Foldable (Def t)
+deriving instance Foldable (Binds t)
+deriving instance Foldable (Bind t)
+
+deriving instance Traversable (ExpF t)
+deriving instance Traversable (Defs t)
+deriving instance Traversable (Def t)
+deriving instance Traversable (Binds t)
+deriving instance Traversable (Bind t)
+
 data Prim =
   Var Name
-  | ReadInt
-  | ReadFloat
   | N Integer
-  | F Double String -- whether it is in scientific notation? has a leading #i?
+  | F Double String
   | B Bool
   | Unit
+  | C String
   deriving (Eq)
 
 -- newtype Exp = Exp (Fix ExpF)
@@ -110,10 +131,10 @@ instance Bifunctor Bind where
 instance Bifunctor Binds where
   bimap f g (Binds l) = Binds $ map (bimap f g) l
 
-instance Functor (ExpF t) where
-  fmap = bimap id
+-- instance Functor (ExpF t) where
+--   fmap = bimap id
 
 type Exp t = L (ExpF t)
 
 mapExp :: (ExpF t1 (Exp t2) -> ExpF t2 (Exp t2)) -> Exp t1 -> Exp t2
-mapExp f = foldAnn (\p e -> Ann p $ f e)
+mapExp f = foldAnn (\a e -> Ann a $ f e)

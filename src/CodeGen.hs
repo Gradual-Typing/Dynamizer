@@ -29,12 +29,11 @@ instance Pretty L1 where
 
 instance Pretty Prim where
   ppe (Var x)                = text x
-  ppe ReadInt                = text "(read-int)"
-  ppe ReadFloat              = text "(read-float)"
   ppe (N a)                  = integer a
   ppe (F _ s)                = text s
   ppe (B b)                  = ppe b
   ppe Unit                   = text "()"
+  ppe (C c)                  = text "#\\" <> ppe c
 
 
 pparg :: Name -> Type -> Doc
@@ -151,6 +150,9 @@ instance Pretty Operator where
   ppe ExptF      = text "flexpt"
   ppe FloatToInt = text "float->int"
   ppe IntToFloat = text "int->float"
+  ppe CharToInt  = text "char->int"
+  ppe ReadInt    = text "read-int"
+  ppe ReadFloat  = text "read-float"
   
 
 instance Pretty Bool where
@@ -158,21 +160,23 @@ instance Pretty Bool where
   ppe False = text "#f"
 
 instance Pretty Type where
-  ppe BlankTy      = error "blank type should not be prettied"
-  ppe Dyn          = text "Dyn"
-  ppe IntTy        = text "Int"
-  ppe FloatTy      = text "Float"
-  ppe BoolTy       = text "Bool"
-  ppe UnitTy       = text "()"
-  ppe (FunTy ts t) = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
+  ppe BlankTy       = error "blank type should not be prettied"
+  ppe Dyn           = text "Dyn"
+  ppe CharTy        = text "Char"
+  ppe IntTy         = text "Int"
+  ppe FloatTy       = text "Float"
+  ppe BoolTy        = text "Bool"
+  ppe UnitTy        = text "()"
+  ppe (FunTy ts t)  = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
   ppe (ArrTy ts t)  = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
   -- ppe (ArrTy _ _) = error "arrow type should not be prettied"
-  ppe (RefTy t)    = parens $ text "Ref" <+> ppe t
-  ppe (GRefTy t)   = parens $ text "GRef" <+> ppe t
-  ppe (MRefTy t)   = parens $ text "MRef" <+> ppe t
-  ppe (VectTy t)   = parens $ text "Vect" <+> ppe t
-  ppe (GVectTy t)  = parens $ text "GVect" <+> ppe t
-  ppe (MVectTy t)  = parens $ text "MVect" <+> ppe t
+  ppe (RefTy t)     = parens $ text "Ref" <+> ppe t
+  ppe (GRefTy t)    = parens $ text "GRef" <+> ppe t
+  ppe (MRefTy t)    = parens $ text "MRef" <+> ppe t
+  ppe (VectTy t)    = parens $ text "Vect" <+> ppe t
+  ppe (GVectTy t)   = parens $ text "GVect" <+> ppe t
+  ppe (MVectTy t)   = parens $ text "MVect" <+> ppe t
+  ppe (TupleTy ts)  = parens $ text "Tuple" <+> hsep (map ppe ts)
 
 codeGen :: Pretty p => p -> String
 codeGen = render . ppe

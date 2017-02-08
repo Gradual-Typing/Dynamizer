@@ -20,12 +20,14 @@ data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | LeF | EqF | GtF | GeF | MinF | MaxF | RoundF | FloorF
               | CeilingF | TruncateF | SinF | CosF | TanF | AsinF
               | AcosF | AtanF | LogF | ExpF | SqrtF | ExptF
-              | FloatToInt | IntToFloat
+              | FloatToInt | IntToFloat | CharToInt | ReadInt
+              | ReadFloat
                 deriving (Eq,Show)
 
 data Type =
   BlankTy
   | Dyn
+  | CharTy
   | IntTy
   | FloatTy
   | BoolTy
@@ -38,6 +40,7 @@ data Type =
   | VectTy Type
   | GVectTy Type
   | MVectTy Type
+  | TupleTy [Type]
   deriving (Eq,Show)
 
 -- newtype Fix e = In {out::e (Fix e)}
@@ -53,3 +56,6 @@ foldAnn :: Functor e => (a -> e r -> r) -> Ann a e -> r
 foldAnn f (Ann a e) = f a (fmap (foldAnn f) e)
 
 -- pattern Ann a e = Fix (Compose (a,e))
+
+-- traverseAnn :: (Applicative f, Functor e1) => (a -> e1 (f (Ann b e2)) -> f (Ann b e2)) -> Ann a e1 -> f (Ann b e2)
+-- traverseAnn f (Ann a e) = f a (fmap (traverseAnn f) e)

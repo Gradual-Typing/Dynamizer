@@ -175,7 +175,7 @@ pick (Ann _ e) nl = Ann undefined $ fst $ pickExpF nl e
 
 dyn :: Type -> Type
 dyn (ArrTy l _) = ArrTy (replicate (length l) Dyn) Dyn
-dyn _ = Dyn
+dyn _           = Dyn
 
 
 class Gradual p where
@@ -561,6 +561,7 @@ instance Gradual Type where
   lattice (MVectTy t)   = Dyn:(MVectTy <$> lattice t)
   lattice (FunTy t1 t2) = Dyn:(FunTy <$> mapM lattice t1 <*> lattice t2)
   lattice (ArrTy t1 t2) = ArrTy <$> mapM lattice t1 <*> lattice t2
+  lattice (TupleTy ts)  = Dyn:(TupleTy <$> mapM lattice ts)
   lattice Dyn           = [Dyn]
   lattice t             = [Dyn,t]
 
