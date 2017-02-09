@@ -133,16 +133,6 @@ argParser =
   (,) <$ char '[' <*> idParser <* string " : " <*> typeParser <* char ']'
   <|> (\d -> (d,BlankTy)) <$> idParser
 
-bindParser :: Parser (Bind Type L1)
-bindParser = do
-  c <- char '[' <|> char '('
-  x <- idParser
-  whitespace
-  t <- option BlankTy (id <$ char ':' <* whitespace <*> typeParser <* whitespace)
-  e <- expParser
-  if c == '[' then char ']' else char ')'
-  return (Bind x t e)
-
 ifParser,varParser,appParser,opsParser,intParser,boolParser
   ,lambdaParser,letParser,letrecParser,refParser,derefParser
   ,refsetParser,grefParser,gderefParser,grefsetParser,mrefParser,
@@ -150,7 +140,18 @@ ifParser,varParser,appParser,opsParser,intParser,boolParser
    vectsetParser,gvectParser,gvectrefParser,
    gvectsetParser,mvectParser,mvectrefParser,mvectsetParser,asParser,
    beginParser,repeatParser,unitParser,timeParser,topLevParser,
-   floatParser,charParser :: Parser L1
+   floatParser,charParser,tupleParser,tupleProjParser, dconstParser,
+   dlamParser,bindParser :: Parser L1
+
+bindParser = do
+  src <- getPosition
+  c <- char '[' <|> char '('
+  x <- idParser
+  whitespace
+  t <- option BlankTy (id <$ char ':' <* whitespace <*> typeParser <* whitespace)
+  e <- expParser
+  if c == '[' then char ']' else char ')'
+  return $ Ann src $ Bind x t e
                              
 unitParser = Ann <$> getPosition <*> (P Unit <$ try (string "()"))
 
@@ -187,6 +188,24 @@ appParser = do
   es <- sepEndBy expParser whitespace
   char ')'
   return $ Ann src $ App e es
+
+tupleParser = do
+  src <- getPosition
+  try (string "(tuple ")
+  whitespace
+  es <- sepEndBy expParser whitespace
+  char ')'
+  return $ Ann src $ Tuple es
+
+tupleProjParser = do
+  src <- getPosition
+  try (string "(tuple-proj ")
+  whitespace
+  e <- expParser
+  whitespace
+  i <- integer
+  char ')'
+  return $ Ann src $ TupleProj e $ fromIntegral i
 
 op0Parser,op1Parser,op2Parser :: String -> Operator -> Parser L1
 op0Parser = opnParser 0
@@ -238,14 +257,14 @@ opsParser = op2Parser "+ " Plus
             <|> op1Parser "char->int " CharToInt
             <|> op0Parser "read-int" ReadInt
             <|> op0Parser "read-float" ReadFloat
+            <|> op0Parser "read-char" ReadChar
+            <|> op1Parser "display-char" DisplayChar
             
-            
-
 intParser = annotate $ (P . N) <$> try integer
 
 boolParser = annotate $ (\x -> (P . B) $ x == 't') <$ char '#' <*> (char 't' <|> char 'f')
 
-charParser = annotate $ (P . C) <$ string "#\\" <*> (try (string "space") <|> try ((: []) <$> anyChar))
+charParser = annotate $ (P . C) <$ string "#\\" <*> (try (string "newline") <|> try (string "space") <|> try ((: []) <$> anyChar))
 
 lambdaParser = do
   src <- getPosition
@@ -268,7 +287,7 @@ letParser = do
   whitespace
   e <- expParser
   char ')'
-  return $ Ann src $ Let (Binds binds) e
+  return $ Ann src $ Let binds e
 
 letrecParser = do
   src <- getPosition
@@ -280,7 +299,7 @@ letrecParser = do
   whitespace
   e <- expParser
   char ')'
-  return $ Ann src $ Letrec (Binds binds) e
+  return $ Ann src $ Letrec binds e
 
 timeParser = c1Parser "time " Time
 refParser = c1Parser "box " Ref
@@ -311,8 +330,8 @@ asParser = do
   char ')'
   return $ Ann src $ As e t
 
-dconstParser :: Parser (Def Type L1)
 dconstParser = do
+  src <- getPosition
   try $ do string "(define"
            whitespace
   x <- idParser
@@ -320,10 +339,10 @@ dconstParser = do
   t <- option BlankTy (string ": " *> typeParser <* whitespace)
   e <- expParser
   char ')'
-  return $ DConst x t e
+  return $ Ann src $ DConst x t e
 
-dlamParser :: Parser (Def Type L1)
 dlamParser = do
+  src <- getPosition
   try $ do string "(define"
            whitespace
            char '('
@@ -337,7 +356,7 @@ dlamParser = do
   b <- expParser
   whitespace
   char ')'
-  return $ DLam x (map fst args) b $ ArrTy (map snd args) rt
+  return $ Ann src $ DLam x (map fst args) b $ ArrTy (map snd args) rt
 
 beginParser = do
   src <- getPosition
@@ -374,7 +393,7 @@ topLevParser = do
   src <- getPosition
   ds <- sepEndBy (dlamParser <|> dconstParser) whitespace
   es <- sepEndBy expParser whitespace
-  return $ Ann src $ TopLevelDefs (Defs ds) es
+  return $ Ann src $ TopLevel ds es
 
 expParser :: Parser L1
 expParser = try floatParser
@@ -404,6 +423,8 @@ expParser = try floatParser
             <|> mvectParser
             <|> mvectrefParser
             <|> mvectsetParser
+            <|> tupleProjParser
+            <|> tupleParser
             <|> timeParser
             <|> letrecParser
             <|> letParser

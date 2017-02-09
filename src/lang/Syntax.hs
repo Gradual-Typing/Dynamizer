@@ -9,10 +9,6 @@ import Data.Functor.Compose
 
 type Name         = String
 type Args         = [Name]
-data Bind t e     = Bind Name t e
-newtype Binds t e = Binds [Bind t e]
-data Def t e      = DConst Name t e | DLam Name Args e t
-data Defs t e     = Defs [Def t e]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr
@@ -21,7 +17,7 @@ data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | CeilingF | TruncateF | SinF | CosF | TanF | AsinF
               | AcosF | AtanF | LogF | ExpF | SqrtF | ExptF
               | FloatToInt | IntToFloat | CharToInt | ReadInt
-              | ReadFloat
+              | ReadFloat | ReadChar | DisplayChar
                 deriving (Eq,Show)
 
 data Type =

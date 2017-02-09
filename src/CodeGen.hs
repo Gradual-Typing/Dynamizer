@@ -44,29 +44,27 @@ instance Pretty e => Pretty (ExpF1 e) where
   ppe (Op op es)                 = parens $ ppe op <+> hsep (map ppe es)
   ppe (If e1 e2 e3)              = parens $ text "if" <+> ppe e1 $+$ indent (ppe e2) $+$ indent (ppe e3)
   ppe (App e1 es)                = parens $ ppe e1 <+> hsep (map ppe es)
-  ppe (TopLevelDefs (Defs d) es) =
-    vcat' (map (\case
-                   (DConst x t e) ->
-                     parens $ text "define" <+>
-                     text x <+>
-                     (case t of
-                         BlankTy -> ppe e
-                         _ -> char ':' <+> ppe t <+> ppe e)
-                   (DLam x xs e (ArrTy ts t)) ->
-                     parens $ text "define" <+>
-                     parens (text x <+> vcat' (zipWith pparg xs ts)) <+>
-                     (if t == BlankTy then empty
-                      else char ':' <+> ppe t)
-                     $+$ indent (ppe e)
-                   (DLam _ _ _ t) -> error ("defined lambda with type other than arrow" ++ show t))  d)
-    $+$ indent (vcat' $ map ppe es)
-  ppe (Lam xs e (ArrTy ts t))     =
+  ppe (TopLevel d es)            = vcat' (map ppe d) $+$ indent (vcat' $ map ppe es)
+  ppe (Lam xs e (ArrTy ts t))    =
     parens (text "lambda" <+> parens
             (vcat' (zipWith pparg xs ts)) <+>
             (if t == BlankTy then empty
              else char ':' <+> ppe t)
             $+$ indent (ppe e))
-  ppe (Lam _ _ t)                = error ("lambda with type other than arrow" ++ show t)
+  ppe (Lam _ _ t)                = error ("defined as lambda but has type" ++ codeGen t)
+  ppe (DConst x t e) =  parens $ text "define" <+> text x <+>
+    (case t of
+        BlankTy -> ppe e
+        _ -> char ':' <+> ppe t <+> ppe e)
+  ppe (DLam x xs e (ArrTy ts t)) =  parens $ text "define" <+>
+    parens (text x <+> vcat' (zipWith pparg xs ts)) <+>
+    (if t == BlankTy then empty
+     else char ':' <+> ppe t)
+    $+$ indent (ppe e)
+  ppe (DLam x _ _ t)             = error (x ++ " is defined as lambda but has type: " ++ codeGen t)
+  ppe (Bind x BlankTy e)         = brackets (text x $+$ indent (ppe e))
+  ppe (Bind x t e)               =
+    brackets (text x <+> char ':' <+> ppe t $+$ indent (ppe e))
   ppe (Ref e)                    = parens $ text "box" <+> ppe e
   ppe (DeRef e)                  = parens $ text "unbox" <+> ppe e
   ppe (Assign e1 e2)             = parens $ text "box-set!" <+> ppe e1 <+> ppe e2
@@ -85,8 +83,10 @@ instance Pretty e => Pretty (ExpF1 e) where
   ppe (MVect e1 e2)              = parens $ text "mvector" <+> ppe e1 <+> ppe e2
   ppe (MVectRef e1 e2)           = parens $ text "mvector-ref" <+> ppe e1 <+> ppe e2
   ppe (MVectSet e1 e2 e3)        = parens $ text "mvector-set!" <+> ppe e1 <+> ppe e2 <+> ppe e3
-  ppe (Let bs e)                 = parens $ text "let" <+> parens (ppe bs) $+$ indent (ppe e)
-  ppe (Letrec bs e)              = parens $ text "letrec" <+> parens (ppe bs) $+$ indent (ppe e)
+  ppe (Tuple es)                 = parens $ text "tuple" <+> hsep (map ppe es)
+  ppe (TupleProj e i)            = parens $ text "tuple-proj" <+> ppe e <+> int i
+  ppe (Let bs e)                 = parens $ text "let" <+> parens (vcat' (map ppe bs)) $+$ indent (ppe e)
+  ppe (Letrec bs e)              = parens $ text "letrec" <+> parens (vcat' (map ppe bs)) $+$ indent (ppe e)
   ppe (As e t)                   = parens $ ppe e <+> char ':' <+> ppe t
   ppe (Begin es e)               = parens $ text "begin" $+$ indent (vcat' $ map ppe es) $+$ indent (ppe e)
   ppe (Repeat x a e1 e2 e b t)   =
@@ -97,64 +97,57 @@ instance Pretty e => Pretty (ExpF1 e) where
     $+$ ppe e
   ppe (Time e)                   = parens $ text "time" <+> ppe e
   ppe (P p)                      = ppe p
-
-instance Pretty e => Pretty (Binds Type e) where
-  ppe (Binds bs) = vcat' $ map ppe bs
-
-instance Pretty e => Pretty (Bind Type e) where
-  ppe (Bind x BlankTy e) =
-    brackets (text x $+$ indent (ppe e))
-  ppe (Bind x t e)       =
-    brackets (text x <+> char ':' <+> ppe t $+$ indent (ppe e))
-
-instance Pretty Operator where
-  ppe Plus       = char '+'
-  ppe Minus      = char '-'
-  ppe Mult       = char '*'
-  ppe Eq         = char '='
-  ppe Ge         = text ">="
-  ppe Gt         = char '>'
-  ppe Le         = text "<="
-  ppe Lt         = char '<'
-  ppe ShiftR     = text "%>>"
-  ppe ShiftL     = text "%<<"
-  ppe BAnd       = text "binary-and"
-  ppe BOr        = text "binary-or"
-  ppe Div        = text "%/"
-  ppe PlusF      = text "fl+"
-  ppe MinusF     = text "fl-"
-  ppe MultF      = text "fl*"
-  ppe DivF       = text "fl/"
-  ppe ModuloF    = text "flmodulo"
-  ppe AbsF       = text "flabs"
-  ppe LtF        = text "fl<"
-  ppe LeF        = text "fl<="
-  ppe EqF        = text "fl="
-  ppe GtF        = text "fl>"
-  ppe GeF        = text "fl>="
-  ppe MinF       = text "flmin"
-  ppe MaxF       = text "flmax"
-  ppe RoundF     = text "flround"
-  ppe FloorF     = text "flfloor"
-  ppe CeilingF   = text "flceiling"
-  ppe TruncateF  = text "fltruncate"
-  ppe SinF       = text "flsin"
-  ppe CosF       = text "flcos"
-  ppe TanF       = text "fltan"
-  ppe AsinF      = text "flasin"
-  ppe AcosF      = text "flacos"
-  ppe AtanF      = text "flatan"
-  ppe LogF       = text "fllog"
-  ppe ExpF       = text "flexp"
-  ppe SqrtF      = text "flsqrt"
-  ppe ExptF      = text "flexpt"
-  ppe FloatToInt = text "float->int"
-  ppe IntToFloat = text "int->float"
-  ppe CharToInt  = text "char->int"
-  ppe ReadInt    = text "read-int"
-  ppe ReadFloat  = text "read-float"
   
 
+instance Pretty Operator where
+  ppe Plus        = char '+'
+  ppe Minus       = char '-'
+  ppe Mult        = char '*'
+  ppe Eq          = char '='
+  ppe Ge          = text ">="
+  ppe Gt          = char '>'
+  ppe Le          = text "<="
+  ppe Lt          = char '<'
+  ppe ShiftR      = text "%>>"
+  ppe ShiftL      = text "%<<"
+  ppe BAnd        = text "binary-and"
+  ppe BOr         = text "binary-or"
+  ppe Div         = text "%/"
+  ppe PlusF       = text "fl+"
+  ppe MinusF      = text "fl-"
+  ppe MultF       = text "fl*"
+  ppe DivF        = text "fl/"
+  ppe ModuloF     = text "flmodulo"
+  ppe AbsF        = text "flabs"
+  ppe LtF         = text "fl<"
+  ppe LeF         = text "fl<="
+  ppe EqF         = text "fl="
+  ppe GtF         = text "fl>"
+  ppe GeF         = text "fl>="
+  ppe MinF        = text "flmin"
+  ppe MaxF        = text "flmax"
+  ppe RoundF      = text "flround"
+  ppe FloorF      = text "flfloor"
+  ppe CeilingF    = text "flceiling"
+  ppe TruncateF   = text "fltruncate"
+  ppe SinF        = text "flsin"
+  ppe CosF        = text "flcos"
+  ppe TanF        = text "fltan"
+  ppe AsinF       = text "flasin"
+  ppe AcosF       = text "flacos"
+  ppe AtanF       = text "flatan"
+  ppe LogF        = text "fllog"
+  ppe ExpF        = text "flexp"
+  ppe SqrtF       = text "flsqrt"
+  ppe ExptF       = text "flexpt"
+  ppe FloatToInt  = text "float->int"
+  ppe IntToFloat  = text "int->float"
+  ppe CharToInt   = text "char->int"
+  ppe ReadInt     = text "read-int"
+  ppe ReadFloat   = text "read-float"
+  ppe ReadChar    = text "read-char"
+  ppe DisplayChar = text "display-char"
+  
 instance Pretty Bool where
   ppe True = text "#t"
   ppe False = text "#f"
