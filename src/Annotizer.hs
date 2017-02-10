@@ -10,6 +10,8 @@ import Control.Arrow((***))
 import Control.Monad.Extra(concatMapM)
 import Control.Monad.State.Lazy
 import qualified Data.Bifunctor as B
+import qualified Data.Map.Strict as M
+import Data.Maybe (fromMaybe)
 
 import L1
 
@@ -160,10 +162,159 @@ pick (Ann s' e) nl = Ann s' $ fst $ pickExpF nl e
     pickExpF ns (P p) = (P p,ns)
     pickExpF _ _ = error "internal error"
 
-dyn :: Type -> Type
-dyn (ArrTy l _) = ArrTy (replicate (length l) Dyn) Dyn
-dyn _           = Dyn
+replaceTypes :: M.Map SourcePos Type -> L1 -> L1
+replaceTypes src2pos = foldAnn (\x y -> Ann x (replaceTypes' src2pos x y))
+  where
+    dyn :: Type -> Type
+    dyn (ArrTy l _) = ArrTy (replicate (length l) Dyn) Dyn
+    dyn _           = Dyn
 
+    replaceTypes' :: M.Map SourcePos Type -> SourcePos -> ExpF Type L1 -> ExpF Type L1
+    replaceTypes' tb s (Lam args e t)      =
+      Lam args e $ fromMaybe (dyn t) $ M.lookup s tb
+    replaceTypes' tb s (Bind x t e)        =
+      Bind x (fromMaybe (dyn t) $ M.lookup s tb) e
+    replaceTypes' tb s (As e t)            =
+      As e $ fromMaybe (dyn t) $ M.lookup s tb
+    replaceTypes' tb s (DConst x t e)      =
+      DConst x (fromMaybe (dyn t) $ M.lookup s tb) e
+    replaceTypes' tb s (DLam x xs e t)     =
+      DLam x xs e $ fromMaybe (dyn t) $ M.lookup s tb
+    replaceTypes' tb s (Repeat ii a e1 e2 e b t)  =
+      Repeat ii a e1 e2 e b $ fromMaybe (dyn t) $ M.lookup s tb
+    replaceTypes' _ _ e                    = e
+
+-- computes the sizes of local lattices
+  -- max # of nodes, src pos, # nodes, ...
+countTypeLattice :: SourcePos -> L1 -> State Int [(SourcePos,Int,[Int],[Type])]
+countTypeLattice _ (Ann src expr)  = countTypeLattice' src expr
+  where
+ countTypeLattice' s (Op _ es)           =
+   concatMapM (countTypeLattice s) es
+ countTypeLattice' s (If e1 e2 e3)       =
+   (\x y z -> x++y++z)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+   <*> countTypeLattice s e3
+ countTypeLattice' s (App e1 es)         =
+   (++) <$> countTypeLattice s e1
+   <*> concatMapM (countTypeLattice s) es
+ countTypeLattice' s (TopLevel d e)      =
+   (++)
+   <$> concatMapM (countTypeLattice s) d
+   <*> concatMapM (countTypeLattice s) e
+ countTypeLattice' s (Lam _ e' t)        =
+   get >>= \y -> let st = static t
+                     ts = lattice t
+                 in put (st+y) >> (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e'
+ countTypeLattice' s (Bind _ t e) = do
+   y <- get
+   let st  = static t
+       ts = lattice t
+   put (st+y)
+   (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e
+ countTypeLattice' s (Ref e')            = countTypeLattice s e'
+ countTypeLattice' s (DeRef e')          = countTypeLattice s e'
+ countTypeLattice' s (Assign e1 e2)      =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (GRef e')           = countTypeLattice s e'
+ countTypeLattice' s (GDeRef e')         = countTypeLattice s e'
+ countTypeLattice' s (GAssign e1 e2)     =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (MRef e')           = countTypeLattice s e'
+ countTypeLattice' s (MDeRef e')         = countTypeLattice s e'
+ countTypeLattice' s (MAssign e1 e2)     =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (Vect e1 e2)        =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (VectRef e1 e2)     =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (VectSet e1 e2 e3)  =
+   (\x y z -> x++y++z)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+   <*> countTypeLattice s e3
+ countTypeLattice' s (GVect e1 e2)       =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (GVectRef e1 e2)    =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (GVectSet e1 e2 e3) =
+   (\x y z -> x++y++z)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+   <*> countTypeLattice s e3
+ countTypeLattice' s (MVect e1 e2)       =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (MVectRef e1 e2)    =
+   (++)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (MVectSet e1 e2 e3) =
+   (\x y z -> x++y++z)
+   <$> countTypeLattice s e1
+   <*> countTypeLattice s e2
+   <*> countTypeLattice s e3
+ countTypeLattice' s (Tuple es)          =
+   concatMapM (countTypeLattice s) es
+ countTypeLattice' s (TupleProj e _)     = countTypeLattice s e
+ countTypeLattice' s (Let e1 e2)         =
+   (++)
+   <$> concatMapM (countTypeLattice s) e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (Letrec e1 e2)      =
+   (++)
+   <$> concatMapM (countTypeLattice s) e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (As e' t)           =
+   get >>= \y ->
+   let st = static t
+       ts = lattice t
+   in put (st+y) >> (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e'
+ countTypeLattice' s (Begin e1 e2)       =
+   (++)
+   <$> concatMapM (countTypeLattice s) e1
+   <*> countTypeLattice s e2
+ countTypeLattice' s (Repeat _ _ e1 e2 e3 b t) = do
+   a1 <- countTypeLattice s e1
+   a2 <- countTypeLattice s e2
+   y <- get
+   let st = static t
+       ts = lattice t
+   put (st+y)
+   let a3 = [(s,st, map static ts,ts)]
+   a4 <- countTypeLattice s b
+   a5 <- countTypeLattice s e3
+   return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
+ countTypeLattice' s (Time e')           = countTypeLattice s e'
+ countTypeLattice' s (DConst _ t e) = do
+   y <- get
+   let st  = static t
+       ts = lattice t
+   put (st+y)
+   (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e
+ countTypeLattice' s (DLam _ _ e t) = do
+   y <- get
+   let st  = static t
+       ts = lattice t
+   put (st+y)
+   (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e
+ countTypeLattice' _ _ = return []
 
 class Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
@@ -179,18 +330,11 @@ class Gradual p where
     else 0
   -- counts the number of static type nodes in a program
   static  :: p -> Int
-  -- computes the sizes of local lattices and imposes an order on them
-  -- order tracker,max # of nodes, index, # nodes, ...
-  countTypeLattice :: p -> State (Int,Int) [(Int,Int,[Int],[Type])]
-  replaceTypes :: p -> State [(Int,Type)] p
 
 instance Gradual L1 where
-  -- source information is not relevant
   lattice (Ann i e)           = Ann i <$> lattice e
   count (Ann _ e)             = count e
   static (Ann _ e)            = static e
-  countTypeLattice (Ann _ e)  = countTypeLattice e
-  replaceTypes (Ann i e)      = Ann i <$> replaceTypes e
 
 instance Gradual e => Gradual (ExpF1 e) where
   lattice (Lam args e t)      = Lam args <$> lattice e <*> lattice t
@@ -250,7 +394,7 @@ instance Gradual e => Gradual (ExpF1 e) where
   count (Lam _ e t)           = let c1 = count e
                                     c2 = count t
                                 in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (Bind _ t e)            =
+  count (Bind _ t e)          =
     let c1 = count e
         c2 = count t
     in ((*) (fst c1) *** (+) (snd c1)) c2
@@ -331,199 +475,41 @@ instance Gradual e => Gradual (ExpF1 e) where
     in ((*) (fst c1) *** (+) (snd c1)) c2
   count _                     = (1,0)
 
-  static (Op _ es)           = sum (map static es)
-  static (If e1 e2 e3)       = static e1 + static e2 + static e3
-  static (App e1 es)         = static e1 + sum (map static es)
-  static (TopLevel d e)      = sum (map static d) + sum (map static e)
-  static (Lam _ e t)         = static t + static e
-  static (Bind _ t e)        = static e + static t
-  static (Ref e)             = static e
-  static (DeRef e)           = static e
-  static (Assign e1 e2)      = static e1 + static e2
-  static (GRef e)            = static e
-  static (GDeRef e)          = static e
-  static (GAssign e1 e2)     = static e1 + static e2
-  static (MRef e)            = static e
-  static (MDeRef e)          = static e
-  static (MAssign e1 e2)     = static e1 + static e2
-  static (Vect e1 e2)        = static e1 + static e2
-  static (VectRef e1 e2)     = static e1 + static e2
-  static (VectSet e1 e2 e3)  = static e1 + static e2 + static e3
-  static (GVect e1 e2)       = static e1 + static e2
-  static (GVectRef e1 e2)    = static e1 + static e2
-  static (GVectSet e1 e2 e3) = static e1 + static e2 + static e3
-  static (MVect e1 e2)       = static e1 + static e2
-  static (MVectRef e1 e2)    = static e1 + static e2
-  static (MVectSet e1 e2 e3) = static e1 + static e2 + static e3
-  static (Tuple es)          = sum $ map static es
-  static (TupleProj e _)     = static e
-  static (Let e1 e2)         = sum (map static e1) + static e2
-  static (Letrec e1 e2)      = sum (map static e1) + static e2
-  static (As e t)            = static t + static e
-  static (Begin e' e)        = static e + sum (map static e')
+  static (Op _ es)            = sum (map static es)
+  static (If e1 e2 e3)        = static e1 + static e2 + static e3
+  static (App e1 es)          = static e1 + sum (map static es)
+  static (TopLevel d e)       = sum (map static d) + sum (map static e)
+  static (Lam _ e t)          = static t + static e
+  static (Bind _ t e)         = static e + static t
+  static (Ref e)              = static e
+  static (DeRef e)            = static e
+  static (Assign e1 e2)       = static e1 + static e2
+  static (GRef e)             = static e
+  static (GDeRef e)           = static e
+  static (GAssign e1 e2)      = static e1 + static e2
+  static (MRef e)             = static e
+  static (MDeRef e)           = static e
+  static (MAssign e1 e2)      = static e1 + static e2
+  static (Vect e1 e2)         = static e1 + static e2
+  static (VectRef e1 e2)      = static e1 + static e2
+  static (VectSet e1 e2 e3)   = static e1 + static e2 + static e3
+  static (GVect e1 e2)        = static e1 + static e2
+  static (GVectRef e1 e2)     = static e1 + static e2
+  static (GVectSet e1 e2 e3)  = static e1 + static e2 + static e3
+  static (MVect e1 e2)        = static e1 + static e2
+  static (MVectRef e1 e2)     = static e1 + static e2
+  static (MVectSet e1 e2 e3)  = static e1 + static e2 + static e3
+  static (Tuple es)           = sum $ map static es
+  static (TupleProj e _)      = static e
+  static (Let e1 e2)          = sum (map static e1) + static e2
+  static (Letrec e1 e2)       = sum (map static e1) + static e2
+  static (As e t)             = static t + static e
+  static (Begin e' e)         = static e + sum (map static e')
   static (Repeat _ _ e1 e2 e3 b t) = static e1 + static e2 + static e3 + static b + static t
-  static (Time e)            = static e
-  static (DConst _ t e)           = static e + static t
-  static (DLam _ _ e t)           = static e + static t
-  static _                   = 0
-
-  -- order tracker,max # of nodes, index, # nodes, ...
-  countTypeLattice (Op _ es)           = concatMapM countTypeLattice es
-  countTypeLattice (If e1 e2 e3)       = (\x y z -> x++y++z) <$> countTypeLattice e1 <*> countTypeLattice e2 <*> countTypeLattice e3
-  countTypeLattice (App e1 es)         = (++) <$> countTypeLattice e1 <*> concatMapM countTypeLattice es
-  countTypeLattice (TopLevel d e)      = (++) <$> concatMapM countTypeLattice d <*> concatMapM countTypeLattice e
-  countTypeLattice (Lam _ e' t)        =
-    get >>= \(x,y) -> let s = static t
-                          ts = lattice t
-                      in put (x+1,s+y) >> (:) <$> return (x,s, map static ts,ts) <*> countTypeLattice e'
-  countTypeLattice (Bind _ t e) = do
-    (x,y) <- get
-    let s  = static t
-        ts = lattice t
-    put (x+1,s+y)
-    (:) <$> return (x,s, map static ts,ts) <*> countTypeLattice e
-  countTypeLattice (Ref e')            = countTypeLattice e'
-  countTypeLattice (DeRef e')          = countTypeLattice e'
-  countTypeLattice (Assign e1 e2)      = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (GRef e')           = countTypeLattice e'
-  countTypeLattice (GDeRef e')         = countTypeLattice e'
-  countTypeLattice (GAssign e1 e2)     = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (MRef e')           = countTypeLattice e'
-  countTypeLattice (MDeRef e')         = countTypeLattice e'
-  countTypeLattice (MAssign e1 e2)     = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (Vect e1 e2)        = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (VectRef e1 e2)     = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (VectSet e1 e2 e3)  = (\x y z -> x++y++z) <$> countTypeLattice e1 <*> countTypeLattice e2 <*> countTypeLattice e3
-  countTypeLattice (GVect e1 e2)       = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (GVectRef e1 e2)    = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (GVectSet e1 e2 e3) = (\x y z -> x++y++z) <$> countTypeLattice e1 <*> countTypeLattice e2 <*> countTypeLattice e3
-  countTypeLattice (MVect e1 e2)       = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (MVectRef e1 e2)    = (++) <$> countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (MVectSet e1 e2 e3) = (\x y z -> x++y++z) <$> countTypeLattice e1 <*> countTypeLattice e2 <*> countTypeLattice e3
-  countTypeLattice (Tuple es)          = concatMapM countTypeLattice es
-  countTypeLattice (TupleProj e _)     = countTypeLattice e
-  countTypeLattice (Let e1 e2)         = (++) <$> concatMapM countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (Letrec e1 e2)      = (++) <$> concatMapM countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (As e' t)           =
-    get >>= \(x,y) -> let s = static t
-                          ts = lattice t
-                      in put (x+1,s+y) >> (:) <$> return (x,s, map static ts,ts) <*> countTypeLattice e'
-  countTypeLattice (Begin e1 e2)       = (++) <$> concatMapM countTypeLattice e1 <*> countTypeLattice e2
-  countTypeLattice (Repeat _ _ e1 e2 e3 b t) = do
-    a1 <- countTypeLattice e1
-    a2 <- countTypeLattice e2
-    (x,y) <- get
-    let s = static t
-        ts = lattice t
-    put (x+1,s+y)
-    let a3 = [(x,s, map static ts,ts)]
-    a4 <- countTypeLattice b
-    a5 <- countTypeLattice e3
-    return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
-  countTypeLattice (Time e')           = countTypeLattice e'
-  countTypeLattice (DConst _ t e) = do
-    (x,y) <- get
-    let s  = static t
-        ts = lattice t
-    put (x+1,s+y)
-    (:) <$> return (x,s, map static ts,ts) <*> countTypeLattice e
-  countTypeLattice (DLam _ _ e t) = do
-    (x,y) <- get
-    let s  = static t
-        ts = lattice t
-    put (x+1,s+y)
-    (:) <$> return (x,s, map static ts,ts) <*> countTypeLattice e
-  countTypeLattice _ = return []
-
-  replaceTypes (Op op es)          = Op op <$> mapM replaceTypes es
-  replaceTypes (If e1 e2 e3)       = If <$> replaceTypes e1 <*> replaceTypes e2 <*> replaceTypes e3
-  replaceTypes (App e1 es)         = App <$> replaceTypes e1 <*> mapM replaceTypes es
-  replaceTypes (TopLevel d e)      = TopLevel <$> mapM replaceTypes d <*> mapM replaceTypes e
-  replaceTypes (Lam args e t)      = do
-    ll <- get
-    case ll of
-      ts@((i,t'):l) ->
-        if i == 0
-        then do put (map (\(x,y)->(x-1,y)) l)
-                Lam args <$> replaceTypes e <*> return t'
-        else do put (map (\(x,y)->(x-1,y)) ts)
-                Lam args <$> replaceTypes e <*> return (dyn t)
-      _ -> return (Lam args e $ dyn t)
-  replaceTypes (Bind xx t e)    = do
-    ll <- get
-    case ll of
-      ts@((i,t'):l) ->
-        if i == 0
-        then do put (map (\(x,y)->(x-1,y)) l)
-                Bind xx <$> return t' <*> replaceTypes e
-        else do put (map (\(x,y)->(x-1,y)) ts)
-                Bind xx <$> return (dyn t) <*> replaceTypes e
-      _ -> return (Bind xx (dyn t) e)
-  replaceTypes (Ref e)             = Ref <$> replaceTypes e
-  replaceTypes (DeRef e)           = DeRef <$> replaceTypes e
-  replaceTypes (Assign e1 e2)      = Assign <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (GRef e)            = GRef <$> replaceTypes e
-  replaceTypes (GDeRef e)          = GDeRef <$> replaceTypes e
-  replaceTypes (GAssign e1 e2)     = GAssign <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (MRef e)            = MRef <$> replaceTypes e
-  replaceTypes (MDeRef e)          = MDeRef <$> replaceTypes e
-  replaceTypes (MAssign e1 e2)     = MAssign <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (Vect e1 e2)        = Vect <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (VectRef e1 e2)     = VectRef <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (VectSet e1 e2 e3)  = VectSet <$> replaceTypes e1 <*> replaceTypes e2 <*> replaceTypes e3
-  replaceTypes (GVect e1 e2)       = GVect <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (GVectRef e1 e2)    = GVectRef <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (GVectSet e1 e2 e3) = GVectSet <$> replaceTypes e1 <*> replaceTypes e2 <*> replaceTypes e3
-  replaceTypes (MVect e1 e2)       = MVect <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (MVectRef e1 e2)    = MVectRef <$> replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (MVectSet e1 e2 e3) = MVectSet <$> replaceTypes e1 <*> replaceTypes e2 <*> replaceTypes e3
-  replaceTypes (Tuple es)          = Tuple <$> mapM replaceTypes es
-  replaceTypes (TupleProj e i)     = TupleProj <$> replaceTypes e <*> return i
-  replaceTypes (Let e1 e2)         = Let <$> mapM replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (Letrec e1 e2)      = Letrec <$> mapM replaceTypes e1 <*> replaceTypes e2
-  replaceTypes (As e t)            = do
-    ll <- get
-    case ll of
-      ts@((i,t'):l) ->
-        if i == 0
-        then do put (map (\(x,y)->(x-1,y)) l)
-                As <$> replaceTypes e <*> return t'
-        else do put (map (\(x,y)->(x-1,y)) ts)
-                As <$> replaceTypes e <*> return (dyn t)
-      _ -> return (As e $ dyn t)
-  replaceTypes (Begin e' e)        = Begin <$> mapM replaceTypes e' <*> replaceTypes e
-  replaceTypes (Repeat ii a e1 e2 e b t)  = do
-    ll <- get
-    case ll of
-      ts@((i,t'):l) ->
-        if i == 0
-        then do put (map (\(x,y)->(x-1,y)) l)
-                Repeat ii a <$> replaceTypes e1 <*> replaceTypes e2 <*> replaceTypes e <*> replaceTypes b <*> return t'
-        else do put (map (\(x,y)->(x-1,y)) ts)
-                Repeat ii a <$> replaceTypes e1 <*> replaceTypes e2 <*> replaceTypes e <*> replaceTypes b <*> return (dyn t)
-      _ -> return (Repeat ii a e1 e2 e b $ dyn t)
-  replaceTypes (Time e)            = Time <$> replaceTypes e
-  replaceTypes (DConst xx t e)    = do
-    ll <- get
-    case ll of
-      ts@((i,t'):l) ->
-        if i == 0
-        then do put (map (\(x,y)->(x-1,y)) l)
-                DConst xx <$> return t' <*> replaceTypes e
-        else do put (map (\(x,y)->(x-1,y)) ts)
-                DConst xx <$> return (dyn t) <*> replaceTypes e
-      _ -> return (DConst xx (dyn t) e)
-  replaceTypes (DLam xx xs e t)    = do
-    ll <- get
-    case ll of
-      ts@((i,t'):l) ->
-        if i == 0
-        then do put (map (\(x,y)->(x-1,y)) l)
-                DLam xx xs <$> replaceTypes e <*> return t'
-        else do put (map (\(x,y)->(x-1,y)) ts)
-                DLam xx xs <$> replaceTypes e <*> return (dyn t)
-      _ -> return (DLam xx xs e (dyn t))
-  replaceTypes e                   = return e
+  static (Time e)             = static e
+  static (DConst _ t e)       = static e + static t
+  static (DLam _ _ e t)       = static e + static t
+  static _                    = 0
 
 instance Gradual Type where
   lattice (RefTy t)     = Dyn:(RefTy <$> lattice t)
@@ -555,16 +541,13 @@ instance Gradual Type where
   count Dyn             = (1,1)
   count _               = (2,1)
 
-  static Dyn           = 0
-  static (RefTy t)     = 1 + static t
-  static (GRefTy t)    = 1 + static t
-  static (MRefTy t)    = 1 + static t
-  static (VectTy t)    = 1 + static t
-  static (GVectTy t)   = 1 + static t
-  static (MVectTy t)   = 1 + static t
-  static (FunTy t1 t2) = 1 + sum (map static (t2:t1))
-  static (ArrTy t1 t2) = sum (map static (t2:t1))
-  static _             = 1
-
-  countTypeLattice = error "countTypeLattice undefined over types"
-  replaceTypes     = error "replaceTypes undefined over types"
+  static Dyn            = 0
+  static (RefTy t)      = 1 + static t
+  static (GRefTy t)     = 1 + static t
+  static (MRefTy t)     = 1 + static t
+  static (VectTy t)     = 1 + static t
+  static (GVectTy t)    = 1 + static t
+  static (MVectTy t)    = 1 + static t
+  static (FunTy t1 t2)  = 1 + sum (map static (t2:t1))
+  static (ArrTy t1 t2)  = sum (map static (t2:t1))
+  static _              = 1

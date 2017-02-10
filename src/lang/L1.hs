@@ -112,12 +112,9 @@ instance Bifunctor ExpF where
   bimap _ g (Begin e' e)        = Begin (map g e') $ g e
   bimap f g (Repeat i a e1 e2 e b t)  = Repeat i a (g e1) (g e2) (g e) (g b) (f t)
   bimap _ g (Time e)            = Time $ g e
-  bimap f g (DConst x t e) = DConst x (f t) $ g e
-  bimap f g (DLam x args e t) = DLam x args (g e) $ f t
+  bimap f g (DConst x t e)      = DConst x (f t) $ g e
+  bimap f g (DLam x args e t)   = DLam x args (g e) $ f t
   bimap _ _ (P p)               = P p
-
--- instance Functor (ExpF t) where
---   fmap = bimap id
 
 type Exp t = L (ExpF t)
 

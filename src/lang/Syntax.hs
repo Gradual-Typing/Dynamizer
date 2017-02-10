@@ -1,11 +1,17 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
-module Syntax where
+module Syntax(
+  SourcePos,
+  Name,
+  Args,
+  Operator(..),
+  Type(..),
+  Ann(..),
+  L,
+  foldAnn) where
 
 import Text.Parsec.Pos (SourcePos)
-import Data.Functor.Foldable
-import Data.Functor.Compose
 
 type Name         = String
 type Args         = [Name]
@@ -46,7 +52,7 @@ data Ann a e = Ann a (e (Ann a e))
 
 type L a = Ann SourcePos a
 
-type AnnT a e = Fix (Compose ((,) a) e)
+-- type AnnT a e = Fix (Compose ((,) a) e)
 
 foldAnn :: Functor e => (a -> e r -> r) -> Ann a e -> r
 foldAnn f (Ann a e) = f a (fmap (foldAnn f) e)

@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-type-defaults #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Main where
@@ -7,8 +8,8 @@ import System.IO (openFile,hPutStrLn,IOMode(AppendMode),hClose)
 import System.Directory (createDirectoryIfMissing)
 import Control.Monad (foldM_)
 import Text.Printf (hPrintf)
-import Data.List (transpose,nub,zipWith5,elemIndices,sortBy)
-import Data.Function(on)
+import Data.List (transpose,nub,zipWith5,elemIndices)
+import Data.Map.Strict (fromList)
 import System.Random
 import System.Random.Shuffle(shuffle')
 import System.Random.TF (TFGen, seedTFGen)
@@ -20,6 +21,7 @@ import Parser
 import Annotizer
 import CodeGen
 import L1
+
 
 
 parse :: String -> IO (Maybe (L1,Int))
@@ -56,15 +58,15 @@ genIntervals n l = if n > 1
   where f = Finite . floor
 
 -- program, # samples / bin, # bins
-sample :: Gradual p => p -> Int -> Double -> [[p]]
+sample :: L1 -> Int -> Double -> [[L1]]
 sample prog nb b =
-  let (l,(_,m)) = runState (countTypeLattice prog) (0,0)
+  let (l,m) = runState (countTypeLattice undefined prog) 0
       i         = genIntervals b $ fromIntegral m/b
   in sampleMN prog l m i nb
      
   where
     -- index,# of nodes,staticallity,lattice -> potential -> current -> generator -> desired min -> desired max -> types
-    sampleOne :: [(Int,Int,[Int],[Type])] -> Int -> Int -> TFGen -> Int -> Int -> [(Int,Type)]
+    sampleOne :: [(SourcePos,Int,[Int],[Type])] -> Int -> Int -> TFGen -> Int -> Int -> [(SourcePos,Type)]
     sampleOne [] _ _ _ _ _ = []
     sampleOne ((i,n,s,ts):l) p c g mn mx =
       let p'       = p-n 
@@ -76,13 +78,13 @@ sample prog nb b =
               in (i,ts !! (sc !! xi)):sampleOne l p' (c'+c) g'' mn mx
     
     -- program -> info -> max # nodes -> interval -> # samples -> programs
-    sampleN :: Gradual p => p -> [(Int,Int,[Int],[Type])] -> Int -> IntegerInterval -> Int -> [p]
+    sampleN :: L1 -> [(SourcePos,Int,[Int],[Type])] -> Int -> IntegerInterval -> Int -> [L1]
     sampleN _ _ _ _ 0  = []
     sampleN p l1 m i n = case (lowerBound i,upperBound i) of
-      (Finite lb,Finite ub) -> (evalState (replaceTypes p) $ sortBy (compare `on` fst) $ sampleOne (shuffle' l1 (length l1) (seedTFGen (0, 11, 22, 33))) m 0 (seedTFGen (0, 11, 22, 33)) (fromInteger lb) (fromInteger ub)):sampleN p l1 m i (n-1)
+      (Finite lb,Finite ub) -> (replaceTypes (fromList (sampleOne (shuffle' l1 (length l1) (seedTFGen (0, 11, 22, 33))) m 0 (seedTFGen (0, 11, 22, 33)) (fromInteger lb) (fromInteger ub))) p):sampleN p l1 m i (n-1)
       _ -> error "internal error: unsupported ranges"
 
-    sampleMN :: Gradual p => p -> [(Int,Int,[Int],[Type])] -> Int -> [IntegerInterval] -> Int -> [[p]]
+    sampleMN :: L1 -> [(SourcePos,Int,[Int],[Type])] -> Int -> [IntegerInterval] -> Int -> [[L1]]
     sampleMN _ _ _ [] _ = [[]]
     sampleMN p l1 m (i:is) n =  sampleN p l1 m i n:sampleMN p l1 m is n
 
@@ -99,11 +101,11 @@ main = do
       x <- parse fn
       case x of
         Nothing -> return ()
-        Just (e,w) -> writeLattice w (fn ++ "/") $ genSample (read ns::Int) (map (\(_,c,_,_)-> c) $ evalState (countTypeLattice e) (0,0)) (localLattice e)
+        Just (e,w) -> writeLattice w (fn ++ "/") $ genSample (read ns::Int) (map (\(_,c,_,_)-> c) $ evalState (countTypeLattice undefined e) 0) (localLattice e)
      -- path, number of samples in each bin, number of bins
     [fn, ns, nb] -> do
       x <- parse fn
       case x of
         Nothing -> return ()
         Just (e,w) -> writeLattice w (fn ++ "/") $ concat $ sample e (read ns::Int) (read nb::Double)
-    _ -> print "Wrong number of arguments\n"
+    _ -> print "Wrong number of arguments"
