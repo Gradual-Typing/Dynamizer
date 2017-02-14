@@ -184,137 +184,141 @@ replaceTypes src2pos = foldAnn (\x y -> Ann x (replaceTypes' src2pos x y))
       Repeat ii a e1 e2 e b $ fromMaybe (dyn t) $ M.lookup s tb
     replaceTypes' _ _ e                    = e
 
+data TypeInfo = TypeInfo { typePos               :: SourcePos
+                         , typeNodesCount        :: Int
+                         , typeNodesCountLattice :: [Int]
+                         , typeLattice           :: [Type]
+                         }
+
 -- computes the sizes of local lattices
   -- max # of nodes, src pos, # nodes, ...
-countTypeLattice :: SourcePos -> L1 -> State Int [(SourcePos,Int,[Int],[Type])]
-countTypeLattice _ (Ann src expr)  = countTypeLattice' src expr
+genTypeInfo :: SourcePos -> L1 -> State Int [TypeInfo]
+genTypeInfo _ (Ann src expr)  = genTypeInfo' src expr
   where
- countTypeLattice' s (Op _ es)           =
-   concatMapM (countTypeLattice s) es
- countTypeLattice' s (If e1 e2 e3)       =
-   (\x y z -> x++y++z)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
-   <*> countTypeLattice s e3
- countTypeLattice' s (App e1 es)         =
-   (++) <$> countTypeLattice s e1
-   <*> concatMapM (countTypeLattice s) es
- countTypeLattice' s (TopLevel d e)      =
-   (++)
-   <$> concatMapM (countTypeLattice s) d
-   <*> concatMapM (countTypeLattice s) e
- countTypeLattice' s (Lam _ e' t)        =
-   get >>= \y -> let st = static t
-                     ts = lattice t
-                 in put (st+y) >> (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e'
- countTypeLattice' s (Bind _ t e) = do
-   y <- get
-   let st  = static t
-       ts = lattice t
-   put (st+y)
-   (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e
- countTypeLattice' s (Ref e')            = countTypeLattice s e'
- countTypeLattice' s (DeRef e')          = countTypeLattice s e'
- countTypeLattice' s (Assign e1 e2)      =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (GRef e')           = countTypeLattice s e'
- countTypeLattice' s (GDeRef e')         = countTypeLattice s e'
- countTypeLattice' s (GAssign e1 e2)     =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (MRef e')           = countTypeLattice s e'
- countTypeLattice' s (MDeRef e')         = countTypeLattice s e'
- countTypeLattice' s (MAssign e1 e2)     =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (Vect e1 e2)        =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (VectRef e1 e2)     =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (VectSet e1 e2 e3)  =
-   (\x y z -> x++y++z)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
-   <*> countTypeLattice s e3
- countTypeLattice' s (GVect e1 e2)       =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (GVectRef e1 e2)    =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (GVectSet e1 e2 e3) =
-   (\x y z -> x++y++z)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
-   <*> countTypeLattice s e3
- countTypeLattice' s (MVect e1 e2)       =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (MVectRef e1 e2)    =
-   (++)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (MVectSet e1 e2 e3) =
-   (\x y z -> x++y++z)
-   <$> countTypeLattice s e1
-   <*> countTypeLattice s e2
-   <*> countTypeLattice s e3
- countTypeLattice' s (Tuple es)          =
-   concatMapM (countTypeLattice s) es
- countTypeLattice' s (TupleProj e _)     = countTypeLattice s e
- countTypeLattice' s (Let e1 e2)         =
-   (++)
-   <$> concatMapM (countTypeLattice s) e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (Letrec e1 e2)      =
-   (++)
-   <$> concatMapM (countTypeLattice s) e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (As e' t)           =
-   get >>= \y ->
-   let st = static t
-       ts = lattice t
-   in put (st+y) >> (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e'
- countTypeLattice' s (Begin e1 e2)       =
-   (++)
-   <$> concatMapM (countTypeLattice s) e1
-   <*> countTypeLattice s e2
- countTypeLattice' s (Repeat _ _ e1 e2 e3 b t) = do
-   a1 <- countTypeLattice s e1
-   a2 <- countTypeLattice s e2
-   y <- get
-   let st = static t
-       ts = lattice t
-   put (st+y)
-   let a3 = [(s,st, map static ts,ts)]
-   a4 <- countTypeLattice s b
-   a5 <- countTypeLattice s e3
-   return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
- countTypeLattice' s (Time e')           = countTypeLattice s e'
- countTypeLattice' s (DConst _ t e) = do
-   y <- get
-   let st  = static t
-       ts = lattice t
-   put (st+y)
-   (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e
- countTypeLattice' s (DLam _ _ e t) = do
-   y <- get
-   let st  = static t
-       ts = lattice t
-   put (st+y)
-   (:) <$> return (s,st, map static ts,ts) <*> countTypeLattice s e
- countTypeLattice' _ _ = return []
+    genTypeInfo' s (Lam _ e' t)        =
+      get >>= \y -> let st = static t
+                        ts = lattice t
+                    in put (st+y) >> (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e'
+    genTypeInfo' s (Bind _ t e) = do
+      y <- get
+      let st  = static t
+          ts = lattice t
+      put (st+y)
+      (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e
+    genTypeInfo' s (As e' t)           =
+      get >>= \y ->
+      let st = static t
+          ts = lattice t
+      in put (st+y) >> (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e'
+    genTypeInfo' s (Repeat _ _ e1 e2 e3 b t) = do
+      a1 <- genTypeInfo s e1
+      a2 <- genTypeInfo s e2
+      y <- get
+      let st = static t
+          ts = lattice t
+      put (st+y)
+      let a3 = [(TypeInfo s st (map static ts) ts)]
+      a4 <- genTypeInfo s b
+      a5 <- genTypeInfo s e3
+      return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
+    genTypeInfo' s (DConst _ t e) = do
+      y <- get
+      let st  = static t
+          ts = lattice t
+      put (st+y)
+      (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e
+    genTypeInfo' s (DLam _ _ e t) = do
+      y <- get
+      let st  = static t
+          ts = lattice t
+      put (st+y)
+      (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e
+    genTypeInfo' s (Op _ es)           = concatMapM (genTypeInfo s) es
+    genTypeInfo' s (If e1 e2 e3)       =
+      (\x y z -> x++y++z)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+      <*> genTypeInfo s e3
+    genTypeInfo' s (App e1 es)         =
+      (++) <$> genTypeInfo s e1
+      <*> concatMapM (genTypeInfo s) es
+    genTypeInfo' s (TopLevel d e)      =
+      (++)
+      <$> concatMapM (genTypeInfo s) d
+      <*> concatMapM (genTypeInfo s) e
+    genTypeInfo' s (Ref e')            = genTypeInfo s e'
+    genTypeInfo' s (DeRef e')          = genTypeInfo s e'
+    genTypeInfo' s (Assign e1 e2)      =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (GRef e')           = genTypeInfo s e'
+    genTypeInfo' s (GDeRef e')         = genTypeInfo s e'
+    genTypeInfo' s (GAssign e1 e2)     =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (MRef e')           = genTypeInfo s e'
+    genTypeInfo' s (MDeRef e')         = genTypeInfo s e'
+    genTypeInfo' s (MAssign e1 e2)     =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (Vect e1 e2)        =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (VectRef e1 e2)     =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (VectSet e1 e2 e3)  =
+      (\x y z -> x++y++z)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+      <*> genTypeInfo s e3
+    genTypeInfo' s (GVect e1 e2)       =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (GVectRef e1 e2)    =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (GVectSet e1 e2 e3) =
+      (\x y z -> x++y++z)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+      <*> genTypeInfo s e3
+    genTypeInfo' s (MVect e1 e2)       =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (MVectRef e1 e2)    =
+      (++)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (MVectSet e1 e2 e3) =
+      (\x y z -> x++y++z)
+      <$> genTypeInfo s e1
+      <*> genTypeInfo s e2
+      <*> genTypeInfo s e3
+    genTypeInfo' s (Tuple es)          = concatMapM (genTypeInfo s) es
+    genTypeInfo' s (TupleProj e _)     = genTypeInfo s e
+    genTypeInfo' s (Let e1 e2)         =
+      (++)
+      <$> concatMapM (genTypeInfo s) e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (Letrec e1 e2)      =
+      (++)
+      <$> concatMapM (genTypeInfo s) e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (Begin e1 e2)       =
+      (++)
+      <$> concatMapM (genTypeInfo s) e1
+      <*> genTypeInfo s e2
+    genTypeInfo' s (Time e')           = genTypeInfo s e'
+    genTypeInfo' _ _ = return []
 
 class Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
@@ -538,6 +542,9 @@ instance Gradual Type where
                               c2 = count t2
                           in (fst c2 * product (map fst c1),
                               snd c2 + sum (map snd c1))
+  count (TupleTy ts)    = let c1 = map count ts
+                          in (1 + product (map fst c1),
+                              1 + sum (map snd c1))
   count Dyn             = (1,1)
   count _               = (2,1)
 
@@ -550,4 +557,5 @@ instance Gradual Type where
   static (MVectTy t)    = 1 + static t
   static (FunTy t1 t2)  = 1 + sum (map static (t2:t1))
   static (ArrTy t1 t2)  = sum (map static (t2:t1))
+  static (TupleTy ts)   = 1 + sum (map static ts)
   static _              = 1
