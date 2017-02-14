@@ -188,7 +188,7 @@ data TypeInfo = TypeInfo { typePos               :: SourcePos
                          , typeNodesCount        :: Int
                          , typeNodesCountLattice :: [Int]
                          , typeLattice           :: [Type]
-                         }
+                         } deriving Show
 
 -- computes the sizes of local lattices
   -- max # of nodes, src pos, # nodes, ...

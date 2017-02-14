@@ -18,7 +18,6 @@ import Control.Monad.State.Lazy (runState,evalState)
 import L1
 import Annotizer
 
-import Debug.Trace
 
 randomList :: (Random a) => (a,a) -> Int -> TFGen -> [a]
 randomList bnds n = take n . randomRs bnds
@@ -56,7 +55,7 @@ sampleFromBins ast ns nb =
      
   where
     -- typeinfo -> potential -> current -> (desired min , desired max) -> generator -> types
-    sampleOne :: [TypeInfo] -> Int -> Int -> (Int,Int) -> TFGen -> [(SourcePos,Type)]
+    sampleOne :: RandomGen g => [TypeInfo] -> Int -> Int -> (Int,Int) -> g -> [(SourcePos,Type)]
     sampleOne [] _ _ _ _ = []
     sampleOne (ti:tis) p c (mn,mx) g =
       let n       = typeNodesCount ti
@@ -69,10 +68,12 @@ sampleFromBins ast ns nb =
               in (typePos ti,typeLattice ti !! (sc !! xi)):sampleOne tis p' (c'+c) (mn,mx) g''
     
     -- program -> typeinfo -> max # nodes -> interval -> # samples -> programs
-    sampleN :: L1 -> [TypeInfo] -> Int -> Interval Int -> Int -> [L1]
-    sampleN _ _ _ _ 0  = []
-    sampleN p typeInfo m i n = replaceTypes (fromList (sampleOne (shuffle' typeInfo (length typeInfo) (seedTFGen (0, 11, 22, 33))) m 0 (inf i,sup i) (seedTFGen (0, 11, 22, 33)))) p:sampleN p typeInfo m i (n-1)
+    sampleN :: RandomGen g => L1 -> [TypeInfo] -> Int -> Interval Int -> Int -> g -> [L1]
+    sampleN _ _ _ _ 0 _ = []
+    sampleN p typeInfo m i n g =
+      let g' = (snd $ next g)
+      in replaceTypes (fromList (sampleOne (shuffle' typeInfo (length typeInfo) g') m 0 (inf i,sup i) g')) p:sampleN p typeInfo m i (n-1) g'
 
     sampleMN :: L1 -> [TypeInfo] -> Int -> Int -> [Interval Int] -> [[L1]]
     sampleMN _ _ _ _ [] = [[]]
-    sampleMN p typeInfo m n (i:is) =  sampleN p typeInfo m i n:sampleMN p typeInfo m n is
+    sampleMN p typeInfo m n (i:is) =  sampleN p typeInfo m i n (seedTFGen (0, 11, 22, 33)):sampleMN p typeInfo m n is

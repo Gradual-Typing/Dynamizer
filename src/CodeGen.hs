@@ -173,3 +173,6 @@ instance Pretty Type where
 
 codeGen :: Pretty p => p -> String
 codeGen = render . ppe
+
+instance Show L1 where
+  show p = codeGen p
