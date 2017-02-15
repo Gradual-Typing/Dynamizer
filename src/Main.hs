@@ -24,7 +24,7 @@ writeLattice b dname dps =
             hPrintf h ";; %.2f %% \n" (100*dynamic b p)
             hPutStrLn h (codeGen p)
             hClose h
-            return (n+1)) 0 dps
+            return (n+1)) (0 :: Int) dps
 
 main :: IO ()
 main = do
@@ -40,6 +40,8 @@ main = do
       putStrLn ("There are " ++ show a ++ " less precisely typed programs and " ++ show w ++ " type constructors")
       case tail args of
         [] -> writeLattice w dirPath $ lattice e
-        [ns] -> writeLattice w dirPath $ sampleUniformally e (read ns::Int)
+        [ns] -> writeLattice w dirPath $ if a > 10000
+                                         then sampleUniformally e (read ns::Int)
+                                         else sampleUniformally' e (read ns::Int)
         [ns, nb] -> writeLattice w dirPath $ concat $ sampleFromBins e (read ns::Int) (read nb::Double)
         _ -> putStrLn "Invalid number of arguments"

@@ -3,14 +3,15 @@
 
 module Sampling(
   sampleFromBins,
-  sampleUniformally
+  sampleUniformally,
+  sampleUniformally'
   ) where
 
 import Data.List (transpose,nub,zipWith5,elemIndices)
 import Data.Map.Strict (fromList)
-import System.Random
+import System.Random (Random,RandomGen(..),randomR,randomRs)
+import System.Random.TF (seedTFGen)
 import System.Random.Shuffle(shuffle')
-import System.Random.TF (TFGen, seedTFGen)
 import Numeric.Interval (Interval,inf,sup,interval)
 import Data.Maybe (fromMaybe)
 import Control.Monad.State.Lazy (runState,evalState)
@@ -19,15 +20,25 @@ import L1
 import Annotizer
 
 
-randomList :: (Random a) => (a,a) -> Int -> TFGen -> [a]
+randomList :: (Random a,RandomGen g) => (a,a) -> Int -> g -> [a]
 randomList bnds n = take n . randomRs bnds
 
--- I am not happy with this sampling methodology for small programs
-sampleUniformally:: L1 -> Int -> [L1]
+-- | Sample partially-typed versions uniformally.
+sampleUniformally :: L1 -- ^ The fully-statically typed AST to sample from
+                  -> Int  -- ^ The number of samples
+                  -> [L1] -- ^ The list of samples
 sampleUniformally e ns = map (pick $ localLattice e) $ nub rns
   where
-    rns = transpose $ zipWith5 (\n a b c d -> randomList (0,n-1) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
     tns = map typeNodesCount $ evalState (genTypeInfo undefined e) 0
+    rns = transpose $ zipWith5 (\n a b c d -> randomList (0,n) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
+
+-- | Sample partially-typed versions uniformally. It generates the full lattice before sampling.
+sampleUniformally' :: L1 -- ^ The fully-statically typed AST to sample from
+                   -> Int  -- ^ The number of samples
+                   -> [L1] -- ^ The list of samples
+sampleUniformally' e ns =
+  let l = lattice e
+  in map (l !!) $ take ns $ nub $ randomRs (0,length l - 1) $ seedTFGen (0, 11, 22, 33)
 
 genIntervals :: Double -> Double -> [Interval Int]
 genIntervals intervalsCount intervalWidth =
@@ -71,8 +82,9 @@ sampleFromBins ast ns nb =
     sampleN :: RandomGen g => L1 -> [TypeInfo] -> Int -> Interval Int -> Int -> g -> [L1]
     sampleN _ _ _ _ 0 _ = []
     sampleN p typeInfo m i n g =
-      let g' = (snd $ next g)
-      in replaceTypes (fromList (sampleOne (shuffle' typeInfo (length typeInfo) g') m 0 (inf i,sup i) g')) p:sampleN p typeInfo m i (n-1) g'
+      let (g1,g') = split g
+          (g2,g3) = split g'
+      in replaceTypes (fromList (sampleOne (shuffle' typeInfo (length typeInfo) g1) m 0 (inf i,sup i) g2)) p:sampleN p typeInfo m i (n-1) g3
 
     sampleMN :: L1 -> [TypeInfo] -> Int -> Int -> [Interval Int] -> [[L1]]
     sampleMN _ _ _ _ [] = [[]]
