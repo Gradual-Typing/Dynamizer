@@ -8,13 +8,13 @@ module Sampling(
   ) where
 
 import Data.List (transpose,nub,zipWith5,elemIndices)
-import Data.Map.Strict (fromList)
 import System.Random (Random,RandomGen(..),randomR,randomRs)
 import System.Random.TF (seedTFGen)
 import System.Random.Shuffle(shuffle')
 import Numeric.Interval (Interval,inf,sup,interval)
 import Data.Maybe (fromMaybe)
 import Control.Monad.State.Lazy (runState,evalState)
+import qualified Data.Map.Strict as M
 
 import L1
 import Annotizer
@@ -27,9 +27,11 @@ randomList bnds n = take n . randomRs bnds
 sampleUniformally :: L1 -- ^ The fully-statically typed AST to sample from
                   -> Int  -- ^ The number of samples
                   -> [L1] -- ^ The list of samples
-sampleUniformally e ns = map (pick $ localLattice e) $ nub rns
-  where
-    tns = map typeNodesCount $ evalState (genTypeInfo undefined e) 0
+sampleUniformally e ns = map (pick (localLattice e) . M.fromList . zip tps) $ nub rns
+  where    
+    typeinfo = evalState (genTypeInfo undefined e) 0
+    tns = map typeNodesCount typeinfo
+    tps = map typePos typeinfo
     rns = transpose $ zipWith5 (\n a b c d -> randomList (0,n) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
 
 -- | Sample partially-typed versions uniformally. It generates the full lattice before sampling.
@@ -84,7 +86,7 @@ sampleFromBins ast ns nb =
     sampleN p typeInfo m i n g =
       let (g1,g') = split g
           (g2,g3) = split g'
-      in replaceTypes (fromList (sampleOne (shuffle' typeInfo (length typeInfo) g1) m 0 (inf i,sup i) g2)) p:sampleN p typeInfo m i (n-1) g3
+      in replaceTypes (M.fromList (sampleOne (shuffle' typeInfo (length typeInfo) g1) m 0 (inf i,sup i) g2)) p:sampleN p typeInfo m i (n-1) g3
 
     sampleMN :: L1 -> [TypeInfo] -> Int -> Int -> [Interval Int] -> [[L1]]
     sampleMN _ _ _ _ [] = [[]]

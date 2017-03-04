@@ -18,150 +18,56 @@ import L1
 localLattice :: L1 -> L2
 localLattice = mapExp $ B.first (\t->(lattice t,t))
 
-fixType :: L2 -> L1
-fixType = mapExp $ B.first snd
+mapExp' :: (SourcePos -> ExpF t1 (Exp t2) -> ExpF t2 (Exp t2)) -> Exp t1 -> Exp t2
+mapExp' f = foldAnn (\a e -> Ann a $ f a e)
 
-pick :: L2 -> [Int] -> L1
-pick e [] = fixType e
-pick (Ann s' e) nl = Ann s' $ fst $ pickExpF nl e
+pick :: L2 -> M.Map SourcePos Int -> L1
+pick expr src2indx = mapExp' (pick' src2indx) expr
   where
-    pickExpFTraverse :: [Int] -> [L2] -> ([L1], [Int])
-    pickExpFTraverse ns [] = ([],ns)
-    pickExpFTraverse ns (Ann s p:ps) = let (p',ns') = pickExpF ns p
-                                           (ps',ns'') = pickExpFTraverse ns' ps
-                                       in (Ann s p':ps',ns'')
-      
-    pickExpF :: [Int] -> ExpF2 L2 -> (ExpF1 L1, [Int])
-    pickExpF ns (Op f es) =
-      let (es',ns') = pickExpFTraverse ns es
-      in (Op f es',ns')
-    pickExpF ns (If (Ann s1 e1) (Ann s2 e2) (Ann s3 e3)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-          (e3',ns3) = pickExpF ns2 e3
-      in (If (Ann s1 e1') (Ann s2 e2') (Ann s3 e3'),ns3)
-    pickExpF ns (TopLevel e1 e2) =
-      let (e1',ns1) = pickExpFTraverse ns e1
-          (e2',ns2) = pickExpFTraverse ns1 e2
-      in (TopLevel e1' e2',ns2)
-    pickExpF ns (App (Ann s e1) es) =
-      let (e1',ns1) = pickExpF ns e1
-          (es',ns') = pickExpFTraverse ns1 es
-      in (App (Ann s e1') es',ns')
-    pickExpF (n:ns) (Lam x (Ann s e') (t,_)) =
-      let (e'',ns') = pickExpF ns e'
-      in (Lam x (Ann s e'') (t !! n),ns')
-    pickExpF (n:ns) (Bind x (t,_) (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (Bind x (t !! n) (Ann s e''),ns')
-    pickExpF ns (Ref (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (Ref (Ann s e''), ns')
-    pickExpF ns (DeRef (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (DeRef (Ann s e''), ns')
-    pickExpF ns (Assign (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (Assign (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (GRef (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (GRef (Ann s e''), ns')
-    pickExpF ns (GDeRef (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (GDeRef (Ann s e''), ns')
-    pickExpF ns (GAssign (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (GAssign (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (MRef (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (MRef (Ann s e''), ns')
-    pickExpF ns (MDeRef (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (MDeRef (Ann s e''), ns')
-    pickExpF ns (MAssign (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (MAssign (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (Vect (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (Vect (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (VectRef (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (VectRef (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (VectSet (Ann s1 e1) (Ann s2 e2) (Ann s3 e3)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-          (e3',ns3) = pickExpF ns2 e3
-      in (VectSet (Ann s1 e1') (Ann s2 e2') (Ann s3 e3'), ns3)
-    pickExpF ns (GVect (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (GVect (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (GVectRef (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (GVectRef (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (GVectSet (Ann s1 e1) (Ann s2 e2) (Ann s3 e3)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-          (e3',ns3) = pickExpF ns2 e3
-      in (GVectSet (Ann s1 e1') (Ann s2 e2') (Ann s3 e3'), ns3)
-    pickExpF ns (MVect (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (MVect (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (MVectRef (Ann s1 e1) (Ann s2 e2)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-      in (MVectRef (Ann s1 e1') (Ann s2 e2'), ns2)
-    pickExpF ns (MVectSet (Ann s1 e1) (Ann s2 e2) (Ann s3 e3)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-          (e3',ns3) = pickExpF ns2 e3
-      in (MVectSet (Ann s1 e1') (Ann s2 e2') (Ann s3 e3'), ns3)
-    pickExpF ns (Let e1 (Ann s e2)) =
-      let (e1',ns') = pickExpFTraverse ns e1
-          (e2',ns2) = pickExpF ns' e2
-      in (Let e1' (Ann s e2'),ns2)
-    pickExpF ns (Tuple es) =
-      let (es',ns') = pickExpFTraverse ns es
-      in (Tuple es',ns')
-    pickExpF ns (TupleProj (Ann s e1) i) =
-      let (e',ns') = pickExpF ns e1
-      in (TupleProj (Ann s e') i, ns')
-    pickExpF ns (Letrec e1 (Ann s e2)) =
-      let (e1',ns') = pickExpFTraverse ns e1
-          (e2',ns2) = pickExpF ns' e2
-      in (Letrec e1' (Ann s e2'),ns2)
-    pickExpF (n:ns) (As (Ann s e') (t,_)) =
-      let (e'',ns') = pickExpF ns e'
-      in (As (Ann s e'') (t !! n),ns')
-    pickExpF ns (Begin e1 (Ann s e2)) =
-      let (e1',ns') = pickExpFTraverse ns e1
-          (e2',ns2) = pickExpF ns' e2
-      in (Begin e1' (Ann s e2'),ns2)
-    pickExpF (n:ns) (Repeat i a (Ann s1 e1) (Ann s2 e2) (Ann s3 e3) (Ann s4 b) (t,_)) =
-      let (e1',ns1) = pickExpF ns e1
-          (e2',ns2) = pickExpF ns1 e2
-          (b',ns3) = pickExpF ns2 b
-          (e3',ns4) = pickExpF ns3 e3
-      in (Repeat i a (Ann s1 e1') (Ann s2 e2') (Ann s3 e3') (Ann s4 b') (t !! n), ns4)
-    pickExpF ns (Time (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (Time (Ann s e''), ns')
-    pickExpF (n:ns) (DConst x (t,_) (Ann s e')) =
-      let (e'',ns') = pickExpF ns e'
-      in (DConst x (t !! n) (Ann s e''),ns')
-    pickExpF (n:ns) (DLam x xs (Ann s e') (t,_)) =
-      let (e'',ns') = pickExpF ns e'
-      in (DLam x xs (Ann s e'') (t !! n),ns')
-    pickExpF ns (P p) = (P p,ns)
-    pickExpF _ _ = error "internal error"
-
+    pick' :: M.Map SourcePos Int -> SourcePos -> ExpF ([Type], Type) (Exp Type) -> ExpF1 L1
+    pick' si s (Lam args e (ts,t))             =
+      Lam args e $ maybe t (ts !!) $ M.lookup s si
+    pick' si s (Bind x (ts,t) e)               =
+      Bind x (maybe t (ts !!) $ M.lookup s si) e
+    pick' si s (As e (ts,t))                   =
+      As e $ maybe t (ts !!) $ M.lookup s si
+    pick' si s (DConst x (ts,t) e)             =
+      DConst x (maybe t (ts !!) $ M.lookup s si) e
+    pick' si s (DLam x xs e (ts,t))            =
+      DLam x xs e $ maybe t (ts !!) $ M.lookup s si
+    pick' si s (Repeat ii a e1 e2 e b (ts,t))  =
+      Repeat ii a e1 e2 e b $ maybe t (ts !!) $ M.lookup s si
+    -- Reconstructing terms at the desired type, is there a better way to do this?
+    pick' _ _ (Op op es)                       = Op op es
+    pick' _ _ (TopLevel es1 es2)               = TopLevel es1 es2
+    pick' _ _ (If e1 e2 e3)                    = If e1 e2 e3
+    pick' _ _ (App e es)                       = App e es
+    pick' _ _ (Ref e)                          = Ref e
+    pick' _ _ (DeRef e)                        = DeRef e
+    pick' _ _ (Assign e1 e2)                   = Assign e1 e2
+    pick' _ _ (GRef e)                         = GRef e
+    pick' _ _ (GDeRef e)                       = GDeRef e
+    pick' _ _ (GAssign e1 e2)                  = GAssign e1 e2
+    pick' _ _ (MRef e)                         = MRef e
+    pick' _ _ (MDeRef e)                       = MDeRef e
+    pick' _ _ (MAssign e1 e2)                  = MAssign e1 e2
+    pick' _ _ (Vect e1 e2)                     = Vect e1 e2
+    pick' _ _ (VectRef e1 e2)                  = VectRef e1 e2
+    pick' _ _ (VectSet e1 e2 e3)               = VectSet e1 e2 e3
+    pick' _ _ (GVect e1 e2)                    = GVect e1 e2
+    pick' _ _ (GVectRef e1 e2)                 = GVectRef e1 e2
+    pick' _ _ (GVectSet e1 e2 e3)              = GVectSet e1 e2 e3
+    pick' _ _ (MVect e1 e2)                    = MVect e1 e2
+    pick' _ _ (MVectRef e1 e2)                 = MVectRef e1 e2
+    pick' _ _ (MVectSet e1 e2 e3)              = MVectSet e1 e2 e3
+    pick' _ _ (Tuple es)                       = Tuple es
+    pick' _ _ (TupleProj e i)                  = TupleProj e i
+    pick' _ _ (Let es e)                       = Let es e
+    pick' _ _ (Letrec es e)                    = Letrec es e
+    pick' _ _ (Begin es e)                     = Begin es e
+    pick' _ _ (Time e)                         = Time e
+    pick' _ _ (P p)                            = P p
+    
 replaceTypes :: M.Map SourcePos Type -> L1 -> L1
 replaceTypes src2pos = foldAnn (\x y -> Ann x (replaceTypes' src2pos x y))
   where

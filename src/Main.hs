@@ -21,7 +21,7 @@ writeLattice b dname dps =
   removePathForcibly dname >> createDirectoryIfMissing False dname >>
   foldM_ (\n p -> do
             h <- openFile (dname ++ show n ++ ".schml") WriteMode
-            hPrintf h ";; %.2f %% \n" (100 * (fromIntegral $ static p :: Double) / fromIntegral b)
+            hPrintf h ";; %.2f%%\n" (100 * (fromIntegral $ static p :: Double) / fromIntegral b)
             hPutStrLn h (codeGen p)
             hClose h
             return (n+1)) (0 :: Int) dps

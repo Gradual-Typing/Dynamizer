@@ -20,14 +20,16 @@ import Syntax
 -- base functor (two-level types trick)
 -- structure operator
 data ExpF t e =
-  Op Operator [e]
-  | DConst Name t e
+  DConst Name t e
   | DLam Name Args e t
+  | Lam Args e t
+  | Bind Name t e
+  | As e t
+  | Repeat Name Name e e e e t
+  | Op Operator [e]
   | TopLevel [e] [e]
   | If e e e
   | App e [e]
-  | Lam Args e t
-  | Bind Name t e
   | Ref e
   | DeRef e
   | Assign e e
@@ -50,9 +52,7 @@ data ExpF t e =
   | TupleProj e Int
   | Let [e] e
   | Letrec [e] e
-  | As e t
   | Begin [e] e
-  | Repeat Name Name e e e e t
   | Time e
   | P Prim
 
