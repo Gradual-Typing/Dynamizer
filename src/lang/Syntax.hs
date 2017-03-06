@@ -1,5 +1,4 @@
 {-# LANGUAGE PatternSynonyms #-}
-{-# LANGUAGE BangPatterns #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Syntax(
