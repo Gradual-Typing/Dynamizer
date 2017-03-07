@@ -6,17 +6,18 @@
 
 module Annotizer where
 
-import Control.Arrow((***))
 import Control.Monad.Extra(concatMapM)
 import Control.Monad.State.Lazy
-import qualified Data.Bifunctor as B
+import Data.Bifunctor (first)
+import Data.Bifoldable (bifoldl')
+import Data.Monoid (Sum, Product,(<>))
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe)
 
 import L1
 
 localLattice :: L1 -> L2
-localLattice = mapExp $ B.first (\t->(lattice t,t))
+localLattice = mapExp $ first (\t->(lattice t,t))
 
 mapExp' :: (SourcePos -> ExpF t1 (Exp t2) -> ExpF t2 (Exp t2)) -> Exp t1 -> Exp t2
 mapExp' f = foldAnn (\a e -> Ann a $ f a e)
@@ -231,7 +232,7 @@ class Gradual p where
   lattice :: p -> [p]
   -- Counts the number of less percise programs and the number of
   -- all type constructors
-  count   :: p -> (Integer,Int)
+  count   :: p -> (Product Integer,Sum Int)
   -- computes the percentage of dynamic code.
   dynamic :: Int -> p -> Double
   dynamic a e =
@@ -248,7 +249,7 @@ instance Gradual L1 where
 
 instance Gradual e => Gradual (ExpF1 e) where
   lattice (Lam args e t)      = Lam args <$> lattice e <*> lattice t
-  lattice (Bind x t e)          = Bind x <$> lattice t <*> lattice e
+  lattice (Bind x t e)        = Bind x <$> lattice t <*> lattice e
   lattice (As e t)            = As <$> lattice e <*> lattice t
   lattice (TopLevel d e)      = TopLevel <$> mapM lattice d <*> mapM lattice e
   lattice (Repeat i a e1 e2 e b t)  =
@@ -287,103 +288,10 @@ instance Gradual e => Gradual (ExpF1 e) where
   lattice (DLam x xs e t)     = DLam x xs <$> lattice e <*> lattice t
   lattice e                   = return e
 
-  count (Op _ es)             = let c = map count es
-                                in (product $ map fst c, sum $ map snd c)
-  count (If e1 e2 e3)         = let c1 = count e1
-                                    c2 = count e2
-                                    c3 = count e3
-                                in  ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
-  count (App e1 es)           = let c1 = count e1
-                                    c = map count es
-                                in (fst c1 * product (map fst c),
-                                    snd c1 + sum (map snd c))
-  count (TopLevel d e)        = let c1 = map count d
-                                    c  = map count e
-                                in (product (map fst c1) * product (map fst c),
-                                    sum (map snd c1) + sum (map snd c))
-  count (Lam _ e t)           = let c1 = count e
-                                    c2 = count t
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (Bind _ t e)          =
-    let c1 = count e
-        c2 = count t
-    in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (Ref e)               = count e
-  count (DeRef e)             = count e
-  count (Assign e1 e2)        = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (GRef e)              = count e
-  count (GDeRef e)            = count e
-  count (GAssign e1 e2)       = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (MRef e)              = count e
-  count (MDeRef e)            = count e
-  count (MAssign e1 e2)       = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (Vect e1 e2)          = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (VectRef e1 e2)       = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (VectSet e1 e2 e3)    = let c1 = count e1
-                                    c2 = count e2
-                                    c3 = count e3
-                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
-  count (GVect e1 e2)         = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (GVectRef e1 e2)      = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (GVectSet e1 e2 e3)   = let c1 = count e1
-                                    c2 = count e2
-                                    c3 = count e3
-                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
-  count (MVect e1 e2)         = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (MVectRef e1 e2)      = let c1 = count e1
-                                    c2 = count e2
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (MVectSet e1 e2 e3)   = let c1 = count e1
-                                    c2 = count e2
-                                    c3 = count e3
-                                in ((*) (fst c1 * fst c2) *** (+) (snd c1 + snd c2)) c3
-  count (Tuple es)            = let c = map count es
-                                in (product (map fst c), sum (map snd c))
-  count (TupleProj e _)       = count e
-  count (Let e1 e2)           = let c1 = map count e1
-                                    c2 = count e2
-                                in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
-  count (Letrec e1 e2)        = let c1 = map count e1
-                                    c2 = count e2
-                                in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
-  count (As e t)              = let c1 = count e
-                                    c2 = count t
-                                in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (Begin e' e)          = let c1 = map count e'
-                                    c2 = count e
-                                in ((*) (product (map fst c1)) *** (+) (sum (map snd c1))) c2
-  count (Repeat _ _ e1 e2 e3 b t)   = let c1 = count e1
-                                          c2 = count e2
-                                          c3 = count e3
-                                          c4 = count b
-                                          c5 = count t
-                                      in ((*) (fst c1 * fst c2 * fst c3 * fst c4) *** (+) (snd c1 + snd c2 + snd c3 + snd c4)) c5
-  count (Time e)              = count e
-  count (DConst _ t e)        =
-    let c1 = count e
-        c2 = count t
-    in ((*) (fst c1) *** (+) (snd c1)) c2
-  count (DLam _ _ e t)        =
-    let c1 = count e
-        c2 = count t
-    in ((*) (fst c1) *** (+) (snd c1)) c2
-  count _                     = (1,0)
+  count = bifoldl' f g (mempty,mempty)
+    where
+      f = (\(a,n) x -> (a <> fst (count x),n <> snd (count x)))
+      g = (\(a,n) x -> (a <> fst (count x),n <> snd (count x))) 
 
   static (Op _ es)            = sum (map static es)
   static (If e1 e2 e3)        = static e1 + static e2 + static e3

@@ -9,6 +9,7 @@ import System.Directory (createDirectoryIfMissing,removePathForcibly)
 import System.FilePath (dropExtension)
 import Text.Printf (hPrintf)
 import Control.Monad (unless,foldM_)
+import Data.Monoid (Sum(..), Product(..))
 
 
 import Parser
@@ -35,9 +36,10 @@ main = do
   case parser p of
     Left err -> print err
     Right e -> do
-      let (a,w)   = count e
+      let (a,w')  = count e
+          w       = getSum w'
           dirPath = dropExtension srcFilePath ++ "/"
-      putStrLn ("There are " ++ show a ++ " less precisely typed programs and " ++ show w ++ " type constructors")
+      putStrLn ("There are " ++ show (getProduct a) ++ " less precisely typed programs and " ++ show w ++ " type constructors")
       case tail args of
         [] -> writeLattice w dirPath $ lattice e
         [ns] -> writeLattice w dirPath $
