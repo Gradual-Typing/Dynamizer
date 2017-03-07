@@ -10,6 +10,7 @@ import Control.Monad.Extra(concatMapM)
 import Control.Monad.State.Lazy
 import Data.Bifunctor (first)
 import Data.Bifoldable (bifoldl')
+import Data.Bitraversable (bitraverse)
 import Data.Monoid (Sum(..), Product(..),(<>))
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe)
@@ -244,50 +245,12 @@ class Gradual p where
   static  :: p -> Sum Int
 
 instance Gradual L1 where
-  lattice (Ann i e)           = Ann i <$> lattice e
-  count (Ann _ e)             = count e
-  static (Ann _ e)            = static e
+  lattice (Ann i e) = Ann i <$> lattice e
+  count (Ann _ e)   = count e
+  static (Ann _ e)  = static e
 
 instance (Gradual t,Gradual e) => Gradual (ExpF t e) where
-  lattice (Lam args e t)      = Lam args <$> lattice e <*> lattice t
-  lattice (Bind x t e)        = Bind x <$> lattice t <*> lattice e
-  lattice (As e t)            = As <$> lattice e <*> lattice t
-  lattice (TopLevel d e)      = TopLevel <$> mapM lattice d <*> mapM lattice e
-  lattice (Repeat i a e1 e2 e b t)  =
-    Repeat i a <$> lattice e1 <*> lattice e2 <*> lattice e <*> lattice b <*> lattice t
-  lattice (Op op es)          = Op op <$> mapM lattice es
-  lattice (If e1 e2 e3)       = If <$> lattice e1 <*> lattice e2 <*> lattice e3
-  lattice (App e1 es)         = App <$> lattice e1 <*> mapM lattice es
-  lattice (Ref e)             = Ref <$> lattice e
-  lattice (DeRef e)           = DeRef <$> lattice e
-  lattice (Assign e1 e2)      = Assign <$> lattice e1 <*> lattice e2
-  lattice (GRef e)            = GRef <$> lattice e
-  lattice (GDeRef e)          = GDeRef <$> lattice e
-  lattice (GAssign e1 e2)     = GAssign <$> lattice e1 <*> lattice e2
-  lattice (MRef e)            = MRef <$> lattice e
-  lattice (MDeRef e)          = MDeRef <$> lattice e
-  lattice (MAssign e1 e2)     = MAssign <$> lattice e1 <*> lattice e2
-  lattice (Vect e1 e2)        = Vect <$> lattice e1 <*> lattice e2
-  lattice (VectRef e1 e2)     = VectRef <$> lattice e1 <*> lattice e2
-  lattice (VectSet e1 e2 e3)  = VectSet <$> lattice e1 <*> lattice e2
-                                <*> lattice e3
-  lattice (GVect e1 e2)       = GVect <$> lattice e1 <*> lattice e2
-  lattice (GVectRef e1 e2)    = GVectRef <$> lattice e1 <*> lattice e2
-  lattice (GVectSet e1 e2 e3) = GVectSet <$> lattice e1 <*> lattice e2
-                                <*> lattice e3
-  lattice (MVect e1 e2)       = MVect <$> lattice e1 <*> lattice e2
-  lattice (MVectRef e1 e2)    = MVectRef <$> lattice e1 <*> lattice e2
-  lattice (MVectSet e1 e2 e3) = MVectSet <$> lattice e1 <*> lattice e2
-                                <*> lattice e3
-  lattice (Tuple es)          = Tuple <$> mapM lattice es
-  lattice (TupleProj e i)     = TupleProj <$> lattice e <*> return i
-  lattice (Let e1 e2)         = Let <$> mapM lattice e1 <*> lattice e2
-  lattice (Letrec e1 e2)      = Letrec <$> mapM lattice e1 <*> lattice e2
-  lattice (Begin e' e)        = Begin <$> mapM lattice e' <*> lattice e
-  lattice (Time e)            = Time <$> lattice e
-  lattice (DConst x t e)      = DConst x <$> lattice t <*> lattice e
-  lattice (DLam x xs e t)     = DLam x xs <$> lattice e <*> lattice t
-  lattice e                   = return e
+  lattice = bitraverse lattice pure
 
   count = bifoldl' f g (mempty,mempty)
     where
