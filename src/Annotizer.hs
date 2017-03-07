@@ -10,7 +10,7 @@ import Control.Monad.Extra(concatMapM)
 import Control.Monad.State.Lazy
 import Data.Bifunctor (first)
 import Data.Bifoldable (bifoldl')
-import Data.Monoid (Sum, Product,(<>))
+import Data.Monoid (Sum(..), Product(..),(<>))
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe)
 
@@ -102,44 +102,45 @@ data TypeInfo = TypeInfo { typePos               :: SourcePos
 genTypeInfo :: SourcePos -> L1 -> State Int [TypeInfo]
 genTypeInfo _ (Ann src expr)  = genTypeInfo' src expr
   where
+    static' = getSum . static
     genTypeInfo' s (Lam _ e' t)        =
-      get >>= \y -> let st = static t
+      get >>= \y -> let st = static' t
                         ts = lattice t
-                    in put (st+y) >> (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e'
+                    in put (st+y) >> (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e'
     genTypeInfo' s (Bind _ t e) = do
       y <- get
-      let st  = static t
+      let st  = static' t
           ts = lattice t
       put (st+y)
-      (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e
+      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e
     genTypeInfo' s (As e' t)           =
       get >>= \y ->
-      let st = static t
+      let st = static' t
           ts = lattice t
-      in put (st+y) >> (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e'
+      in put (st+y) >> (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e'
     genTypeInfo' s (Repeat _ _ e1 e2 e3 b t) = do
       a1 <- genTypeInfo s e1
       a2 <- genTypeInfo s e2
       y <- get
-      let st = static t
+      let st = static' t
           ts = lattice t
       put (st+y)
-      let a3 = [(TypeInfo s st (map static ts) ts)]
+      let a3 = [(TypeInfo s st (map static' ts) ts)]
       a4 <- genTypeInfo s b
       a5 <- genTypeInfo s e3
       return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
     genTypeInfo' s (DConst _ t e) = do
       y <- get
-      let st  = static t
+      let st  = static' t
           ts = lattice t
       put (st+y)
-      (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e
+      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e
     genTypeInfo' s (DLam _ _ e t) = do
       y <- get
-      let st  = static t
+      let st  = static' t
           ts = lattice t
       put (st+y)
-      (:) <$> return (TypeInfo s st (map static ts) ts) <*> genTypeInfo s e
+      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e
     genTypeInfo' s (Op _ es)           = concatMapM (genTypeInfo s) es
     genTypeInfo' s (If e1 e2 e3)       =
       (\x y z -> x++y++z)
@@ -237,17 +238,17 @@ class Gradual p where
   dynamic :: Int -> p -> Double
   dynamic a e =
     if a > 0
-    then fromIntegral (a - static e) / fromIntegral a
+    then fromIntegral (a - getSum (static e)) / fromIntegral a
     else 0
   -- counts the number of static type nodes in a program
-  static  :: p -> Int
+  static  :: p -> Sum Int
 
 instance Gradual L1 where
   lattice (Ann i e)           = Ann i <$> lattice e
   count (Ann _ e)             = count e
   static (Ann _ e)            = static e
 
-instance Gradual e => Gradual (ExpF1 e) where
+instance (Gradual t,Gradual e) => Gradual (ExpF t e) where
   lattice (Lam args e t)      = Lam args <$> lattice e <*> lattice t
   lattice (Bind x t e)        = Bind x <$> lattice t <*> lattice e
   lattice (As e t)            = As <$> lattice e <*> lattice t
@@ -291,43 +292,12 @@ instance Gradual e => Gradual (ExpF1 e) where
   count = bifoldl' f g (mempty,mempty)
     where
       f = (\(a,n) x -> (a <> fst (count x),n <> snd (count x)))
-      g = (\(a,n) x -> (a <> fst (count x),n <> snd (count x))) 
+      g = (\(a,n) x -> (a <> fst (count x),n <> snd (count x)))
 
-  static (Op _ es)            = sum (map static es)
-  static (If e1 e2 e3)        = static e1 + static e2 + static e3
-  static (App e1 es)          = static e1 + sum (map static es)
-  static (TopLevel d e)       = sum (map static d) + sum (map static e)
-  static (Lam _ e t)          = static t + static e
-  static (Bind _ t e)         = static e + static t
-  static (Ref e)              = static e
-  static (DeRef e)            = static e
-  static (Assign e1 e2)       = static e1 + static e2
-  static (GRef e)             = static e
-  static (GDeRef e)           = static e
-  static (GAssign e1 e2)      = static e1 + static e2
-  static (MRef e)             = static e
-  static (MDeRef e)           = static e
-  static (MAssign e1 e2)      = static e1 + static e2
-  static (Vect e1 e2)         = static e1 + static e2
-  static (VectRef e1 e2)      = static e1 + static e2
-  static (VectSet e1 e2 e3)   = static e1 + static e2 + static e3
-  static (GVect e1 e2)        = static e1 + static e2
-  static (GVectRef e1 e2)     = static e1 + static e2
-  static (GVectSet e1 e2 e3)  = static e1 + static e2 + static e3
-  static (MVect e1 e2)        = static e1 + static e2
-  static (MVectRef e1 e2)     = static e1 + static e2
-  static (MVectSet e1 e2 e3)  = static e1 + static e2 + static e3
-  static (Tuple es)           = sum $ map static es
-  static (TupleProj e _)      = static e
-  static (Let e1 e2)          = sum (map static e1) + static e2
-  static (Letrec e1 e2)       = sum (map static e1) + static e2
-  static (As e t)             = static t + static e
-  static (Begin e' e)         = static e + sum (map static e')
-  static (Repeat _ _ e1 e2 e3 b t) = static e1 + static e2 + static e3 + static b + static t
-  static (Time e)             = static e
-  static (DConst _ t e)       = static e + static t
-  static (DLam _ _ e t)       = static e + static t
-  static _                    = 0
+  static = bifoldl' f g mempty
+    where
+      f = (\n x -> n <> static x)
+      g = (\n x -> n <> static x) 
 
 instance Gradual Type where
   lattice (RefTy t)     = Dyn:(RefTy <$> lattice t)
