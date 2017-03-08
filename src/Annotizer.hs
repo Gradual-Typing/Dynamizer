@@ -14,6 +14,7 @@ import Data.Bitraversable (bitraverse)
 import Data.Monoid (Sum(..), Product(..),(<>))
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe)
+import Control.Arrow ((***))
 
 import L1
 
@@ -135,7 +136,7 @@ genTypeInfo (Ann src expr)  = genTypeInfo' src expr
       let st = static' t
           ts = lattice t
       put (st+y)
-      let a3 = [(TypeInfo s st (map static' ts) ts)]
+      let a3 = [TypeInfo s st (map static' ts) ts]
       a4 <- genTypeInfo b
       a5 <- genTypeInfo e3
       return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
@@ -236,7 +237,7 @@ genTypeInfo (Ann src expr)  = genTypeInfo' src expr
       <$> concatMapM genTypeInfo e1
       <*> genTypeInfo e2
     genTypeInfo' _ (Time e')           = genTypeInfo e'
-    genTypeInfo' _ _ = return []
+    genTypeInfo' _ _ = pure []
 
 class Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
@@ -263,13 +264,13 @@ instance (Gradual t,Gradual e) => Gradual (ExpF t e) where
 
   count = bifoldl' f g (mempty,mempty)
     where
-      f = (\(a,n) x -> (a <> fst (count x),n <> snd (count x)))
-      g = (\(a,n) x -> (a <> fst (count x),n <> snd (count x)))
+      f (a,n) x = ((<>) a *** (<>) n) $ count x
+      g (a,n) x = ((<>) a *** (<>) n) $ count x
 
   static = bifoldl' f g mempty
     where
-      f = (\n x -> n <> static x)
-      g = (\n x -> n <> static x) 
+      f n x = n <> static x
+      g n x = n <> static x
 
 instance Gradual Type where
   lattice (RefTy t)     = Dyn:(RefTy <$> lattice t)
