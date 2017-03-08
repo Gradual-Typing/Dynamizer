@@ -100,133 +100,142 @@ data TypeInfo = TypeInfo { typePos               :: SourcePos
 
 -- computes the sizes of local lattices
   -- max # of nodes, src pos, # nodes, ...
-genTypeInfo :: SourcePos -> L1 -> State Int [TypeInfo]
-genTypeInfo _ (Ann src expr)  = genTypeInfo' src expr
+genTypeInfo :: L1 -> State Int [TypeInfo]
+genTypeInfo (Ann src expr)  = genTypeInfo' src expr
+-- it could have defined in terms of a list monoid but that would be
+-- inefficient because the associative operation is concatenation. 
+-- Furthermore, bifoldl will need to be modified to account for the
+-- source position.
+-- bifoldl' f const mempty e
+--     where
+--       f = (\l t ->
+--             let ts = lattice t
+--             in [TypeInfo undefined (getSum $ static t) (map (getSum . static) ts) ts] <> l)
   where
     static' = getSum . static
     genTypeInfo' s (Lam _ e' t)        =
       get >>= \y -> let st = static' t
                         ts = lattice t
-                    in put (st+y) >> (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e'
+                    in put (st+y) >> (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo e'
     genTypeInfo' s (Bind _ t e) = do
       y <- get
       let st  = static' t
           ts = lattice t
       put (st+y)
-      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e
+      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo e
     genTypeInfo' s (As e' t)           =
       get >>= \y ->
       let st = static' t
           ts = lattice t
-      in put (st+y) >> (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e'
+      in put (st+y) >> (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo e'
     genTypeInfo' s (Repeat _ _ e1 e2 e3 b t) = do
-      a1 <- genTypeInfo s e1
-      a2 <- genTypeInfo s e2
+      a1 <- genTypeInfo e1
+      a2 <- genTypeInfo e2
       y <- get
       let st = static' t
           ts = lattice t
       put (st+y)
       let a3 = [(TypeInfo s st (map static' ts) ts)]
-      a4 <- genTypeInfo s b
-      a5 <- genTypeInfo s e3
+      a4 <- genTypeInfo b
+      a5 <- genTypeInfo e3
       return (a1 ++ a2 ++ a3 ++ a4 ++ a5)
     genTypeInfo' s (DConst _ t e) = do
       y <- get
       let st  = static' t
           ts = lattice t
       put (st+y)
-      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e
+      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo e
     genTypeInfo' s (DLam _ _ e t) = do
       y <- get
       let st  = static' t
           ts = lattice t
       put (st+y)
-      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo s e
-    genTypeInfo' s (Op _ es)           = concatMapM (genTypeInfo s) es
-    genTypeInfo' s (If e1 e2 e3)       =
+      (:) <$> return (TypeInfo s st (map static' ts) ts) <*> genTypeInfo e
+    genTypeInfo' _ (Op _ es)           = concatMapM genTypeInfo es
+    genTypeInfo' _ (If e1 e2 e3)       =
       (\x y z -> x++y++z)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-      <*> genTypeInfo s e3
-    genTypeInfo' s (App e1 es)         =
-      (++) <$> genTypeInfo s e1
-      <*> concatMapM (genTypeInfo s) es
-    genTypeInfo' s (TopLevel d e)      =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+      <*> genTypeInfo e3
+    genTypeInfo' _ (App e1 es)         =
+      (++) <$> genTypeInfo e1
+      <*> concatMapM genTypeInfo es
+    genTypeInfo' _ (TopLevel d e)      =
       (++)
-      <$> concatMapM (genTypeInfo s) d
-      <*> concatMapM (genTypeInfo s) e
-    genTypeInfo' s (Ref e')            = genTypeInfo s e'
-    genTypeInfo' s (DeRef e')          = genTypeInfo s e'
-    genTypeInfo' s (Assign e1 e2)      =
+      <$> concatMapM genTypeInfo d
+      <*> concatMapM genTypeInfo e
+    genTypeInfo' _ (Ref e')            = genTypeInfo e'
+    genTypeInfo' _ (DeRef e')          = genTypeInfo e'
+    genTypeInfo' _ (Assign e1 e2)      =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (GRef e')           = genTypeInfo s e'
-    genTypeInfo' s (GDeRef e')         = genTypeInfo s e'
-    genTypeInfo' s (GAssign e1 e2)     =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (GRef e')           = genTypeInfo e'
+    genTypeInfo' _ (GDeRef e')         = genTypeInfo e'
+    genTypeInfo' _ (GAssign e1 e2)     =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (MRef e')           = genTypeInfo s e'
-    genTypeInfo' s (MDeRef e')         = genTypeInfo s e'
-    genTypeInfo' s (MAssign e1 e2)     =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (MRef e')           = genTypeInfo e'
+    genTypeInfo' _ (MDeRef e')         = genTypeInfo e'
+    genTypeInfo' _ (MAssign e1 e2)     =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (Vect e1 e2)        =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (Vect e1 e2)        =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (VectRef e1 e2)     =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (VectRef e1 e2)     =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (VectSet e1 e2 e3)  =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (VectSet e1 e2 e3)  =
       (\x y z -> x++y++z)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-      <*> genTypeInfo s e3
-    genTypeInfo' s (GVect e1 e2)       =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+      <*> genTypeInfo e3
+    genTypeInfo' _ (GVect e1 e2)       =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (GVectRef e1 e2)    =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (GVectRef e1 e2)    =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (GVectSet e1 e2 e3) =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (GVectSet e1 e2 e3) =
       (\x y z -> x++y++z)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-      <*> genTypeInfo s e3
-    genTypeInfo' s (MVect e1 e2)       =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+      <*> genTypeInfo e3
+    genTypeInfo' _ (MVect e1 e2)       =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (MVectRef e1 e2)    =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (MVectRef e1 e2)    =
       (++)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (MVectSet e1 e2 e3) =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (MVectSet e1 e2 e3) =
       (\x y z -> x++y++z)
-      <$> genTypeInfo s e1
-      <*> genTypeInfo s e2
-      <*> genTypeInfo s e3
-    genTypeInfo' s (Tuple es)          = concatMapM (genTypeInfo s) es
-    genTypeInfo' s (TupleProj e _)     = genTypeInfo s e
-    genTypeInfo' s (Let e1 e2)         =
+      <$> genTypeInfo e1
+      <*> genTypeInfo e2
+      <*> genTypeInfo e3
+    genTypeInfo' _ (Tuple es)          = concatMapM genTypeInfo es
+    genTypeInfo' _ (TupleProj e _)     = genTypeInfo e
+    genTypeInfo' _ (Let e1 e2)         =
       (++)
-      <$> concatMapM (genTypeInfo s) e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (Letrec e1 e2)      =
+      <$> concatMapM genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (Letrec e1 e2)      =
       (++)
-      <$> concatMapM (genTypeInfo s) e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (Begin e1 e2)       =
+      <$> concatMapM genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (Begin e1 e2)       =
       (++)
-      <$> concatMapM (genTypeInfo s) e1
-      <*> genTypeInfo s e2
-    genTypeInfo' s (Time e')           = genTypeInfo s e'
+      <$> concatMapM genTypeInfo e1
+      <*> genTypeInfo e2
+    genTypeInfo' _ (Time e')           = genTypeInfo e'
     genTypeInfo' _ _ = return []
 
 class Gradual p where

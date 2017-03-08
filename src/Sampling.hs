@@ -29,7 +29,7 @@ sampleUniformally :: L1 -- ^ The fully-statically typed AST to sample from
                   -> [L1] -- ^ The list of samples
 sampleUniformally e ns = map (pick (localLattice e) . M.fromList . zip tps) $ nub rns
   where    
-    typeinfo = evalState (genTypeInfo undefined e) 0
+    typeinfo = evalState (genTypeInfo e) 0
     tns = map typeNodesCount typeinfo
     tps = map typePos typeinfo
     rns = transpose $ zipWith5 (\n a b c d -> randomList (0,n) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
@@ -63,7 +63,7 @@ sampleFromBins :: L1     -- ^ The fully-statically typed AST to sample from
        -> Double -- ^ The number of bins
        -> [[L1]] -- ^ The list of bins, where each is a list of samples
 sampleFromBins ast ns nb =
-  let (typeInfo,typesNodesCount) = runState (genTypeInfo undefined ast) 0
+  let (typeInfo,typesNodesCount) = runState (genTypeInfo ast) 0
   in sampleMN ast typeInfo typesNodesCount ns $ genIntervals nb $ fromIntegral typesNodesCount/nb
      
   where
