@@ -11,11 +11,11 @@ gradual typing in the Schml project.
 
 ## Run
 
-        $ <stack bin directory>/dynamizer <path to the schml source code file without file extension>
+        $ stack exec dynamizer <path to the schml source code file without file extension>
 
 will generate all less precisely-typed programs for that program and write them to disk in a directory of the same name of the original file beside it.
 
-        $ <stack bin directory>/dynamizer <path to the schml source code file without file extension> n
+        $ stack exec dynamizer <path to the schml source code file without file extension> n
 
 will randomly pick n programs from the lattice and write those in a directory with the same name of the original source code file beside that file.
 

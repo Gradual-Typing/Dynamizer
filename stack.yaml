@@ -5,4 +5,4 @@ extra-deps:
 - data-interval-1.2.0
 - extended-reals-0.2.2.0
 - recursion-schemes-5
-resolver: lts-8.0
+resolver: lts-9.0
