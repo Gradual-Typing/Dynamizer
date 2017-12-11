@@ -22,9 +22,25 @@ Source-repository head
 
 executable dynamizer
   main-is:             Main.hs
-  other-modules:       Annotizer, CodeGen, L1, Parser, Syntax, Sampling
+  other-modules:       Annotizer, CmdOptions, CodeGen, L1, Parser, Syntax, Sampling
   other-extensions:    TypeSynonymInstances, FlexibleInstances, TupleSections, NoMonomorphismRestriction, FlexibleContexts, MultiParamTypeClasses, RankNTypes
-  build-depends:       base, containers, pretty, directory, parsec, mtl, filepath, random, tf-random, transformers, intervals, extra, random-shuffle, lattices, bifunctors, recursion-schemes
+  build-depends:       base
+                     , containers
+                     , pretty
+                     , directory
+                     , parsec
+                     , mtl
+                     , filepath
+                     , random
+                     , tf-random
+                     , transformers
+                     , intervals
+                     , extra
+                     , random-shuffle
+                     , lattices
+                     , bifunctors
+                     , recursion-schemes
+                     , optparse-applicative
   hs-source-dirs:      src,src/lang
   default-language:    Haskell2010
   ghc-options:

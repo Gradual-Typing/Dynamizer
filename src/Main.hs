@@ -3,15 +3,17 @@
 
 module Main where
 
-import System.Environment (getArgs)
+import Data.Semigroup ((<>))
+import Options.Applicative ((<**>), execParser, info, helper, header, progDesc, fullDesc)
 import System.IO (openFile,hPutStrLn,IOMode(WriteMode),hClose)
 import System.Directory (createDirectoryIfMissing,removePathForcibly)
 import System.FilePath (dropExtension)
 import Text.Printf (hPrintf)
-import Control.Monad (unless,foldM_)
+import Control.Monad (foldM_)
 import Data.Monoid (Sum(..), Product(..))
 
 
+import CmdOptions
 import Parser
 import Annotizer
 import CodeGen
@@ -27,11 +29,8 @@ writeLattice b dname dps =
             hClose h
             return (n+1)) (0 :: Int) dps
 
-main :: IO ()
-main = do
-  args <- getArgs
-  unless (not (null args)) (putStrLn "You must provide the path to the Schml source file")
-  let srcFilePath = head args
+greet :: Options -> IO ()
+greet (Options srcFilePath ns nb) = do
   p <- readFile srcFilePath
   case parser p of
     Left err -> print err
@@ -40,11 +39,18 @@ main = do
           w       = getSum w'
           dirPath = dropExtension srcFilePath ++ "/"
       putStrLn ("There are " ++ show (getProduct a) ++ " less precisely typed programs and " ++ show w ++ " type constructors")
-      case tail args of
-        [] -> writeLattice w dirPath $ lattice e
-        [ns] -> writeLattice w dirPath $
-          if a > 10000
-          then sampleUniformally e (read ns::Int)
-          else sampleUniformally' e (read ns::Int)
-        [ns, nb] -> writeLattice w dirPath $ concat $ sampleFromBins e (read ns::Int) (read nb::Double)
-        _ -> putStrLn "Invalid number of arguments"
+      writeLattice w dirPath $ samplingMode a e
+  where samplingMode a e
+          | ns < 0 = lattice e
+          | nb == 1 = if a > 10000
+            then sampleUniformally e ns
+            else sampleUniformally' e ns
+          | otherwise = concat $ sampleFromBins e ns nb
+
+main :: IO ()
+main = greet =<< execParser opts
+  where
+    opts = info (options <**> helper)
+      ( fullDesc
+     <> progDesc "Generates gradually-typed configurations of a statically-typed Grift program"
+     <> header "Dynamizer - lattice generator for gradual typing" )
