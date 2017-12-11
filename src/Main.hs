@@ -21,7 +21,7 @@ writeLattice :: (Gradual p, Pretty p) => Int -> String -> [p] -> IO ()
 writeLattice b dname dps =
   removePathForcibly dname >> createDirectoryIfMissing False dname >>
   foldM_ (\n p -> do
-            h <- openFile (dname ++ show n ++ ".schml") WriteMode
+            h <- openFile (dname ++ show n ++ ".grift") WriteMode
             hPrintf h ";; %.2f%%\n" (100 * (fromIntegral $ getSum (static p) :: Double) / fromIntegral b)
             hPutStrLn h (codeGen p)
             hClose h
