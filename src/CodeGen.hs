@@ -1,16 +1,17 @@
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module CodeGen (
-  codeGen,
-  Pretty(..)
+  codeGen
+  , Pretty
   ) where
 
-import Text.PrettyPrint
+import           Text.PrettyPrint
 
-import L1
+import           Syntax
 
 indent :: Doc -> Doc
 indent = nest 2
@@ -24,45 +25,46 @@ class Pretty p where
 instance Pretty Name where
   ppe = text
 
-instance Pretty L1 where
+instance Pretty Prim where
+  ppe (Var x) = text x
+  ppe (N a)   = integer a
+  ppe (F _ s) = text s
+  ppe (B b)   = ppe b
+  ppe Unit    = text "()"
+  ppe (C c)   = text "#\\" <> ppe c
+
+instance Pretty (e (Ann a e)) => Pretty (Ann a e) where
   ppe (Ann _ e) = ppe e
 
-instance Pretty Prim where
-  ppe (Var x)                = text x
-  ppe (N a)                  = integer a
-  ppe (F _ s)                = text s
-  ppe (B b)                  = ppe b
-  ppe Unit                   = text "()"
-  ppe (C c)                  = text "#\\" <> ppe c
+pparg :: Name -> Ann a Type -> Doc
+pparg a (Ann _ BlankTy) = ppe a
+pparg a t               = lbrack <> ppe a <+> char ':' <+> ppe t <> rbrack
 
-
-pparg :: Name -> Type -> Doc
-pparg a BlankTy = ppe a
-pparg a t = lbrack <> ppe a <+> char ':' <+> ppe t <> rbrack
-
-instance Pretty e => Pretty (ExpF1 e) where
+instance (Pretty e, Show (Ann a Type)) => Pretty (ExpF (Ann a Type) e) where
   ppe (Op op es)                 = parens $ ppe op <+> hsep (map ppe es)
   ppe (If e1 e2 e3)              = parens $ text "if" <+> ppe e1 $+$ indent (ppe e2) $+$ indent (ppe e3)
   ppe (App e1 es)                = parens $ ppe e1 <+> hsep (map ppe es)
   ppe (TopLevel d es)            = vcat' (map ppe d) $+$ indent (vcat' $ map ppe es)
-  ppe (Lam xs e (ArrTy ts t))    =
+  ppe (Lam xs e (Ann _ (ArrTy ts (Ann _ t))))    =
     parens (text "lambda" <+> parens
             (vcat' (zipWith pparg xs ts)) <+>
-            (if t == BlankTy then empty
-             else char ':' <+> ppe t)
+            (case t of
+               BlankTy -> empty
+               _       -> char ':' <+> ppe t)
             $+$ indent (ppe e))
-  ppe (Lam _ _ t)                = error ("defined as lambda but has type" ++ codeGen t)
-  ppe (DConst x t e) =  parens $ text "define" <+> text x <+>
+  ppe (Lam _ _ t)                = error ("defined as lambda but has type" ++ show t)
+  ppe (DConst x (Ann _ t) e)     = parens $ text "define" <+> text x <+>
     (case t of
         BlankTy -> ppe e
-        _ -> char ':' <+> ppe t <+> ppe e)
-  ppe (DLam x xs e (ArrTy ts t)) =  parens $ text "define" <+>
+        _       -> char ':' <+> ppe t <+> ppe e)
+  ppe (DLam x xs e (Ann _ (ArrTy ts (Ann _ t)))) = parens $ text "define" <+>
     parens (text x <+> vcat' (zipWith pparg xs ts)) <+>
-    (if t == BlankTy then empty
-     else char ':' <+> ppe t)
+    (case t of
+       BlankTy -> empty
+       _       -> char ':' <+> ppe t)
     $+$ indent (ppe e)
-  ppe (DLam x _ _ t)             = error (x ++ " is defined as lambda but has type: " ++ codeGen t)
-  ppe (Bind x BlankTy e)         = brackets (text x $+$ indent (ppe e))
+  ppe (DLam x _ _ t)             = error (x ++ " is defined as lambda but has type: " ++ show t)
+  ppe (Bind x (Ann _ BlankTy) e) = brackets (text x $+$ indent (ppe e))
   ppe (Bind x t e)               =
     brackets (text x <+> char ':' <+> ppe t $+$ indent (ppe e))
   ppe (Ref e)                    = parens $ text "box" <+> ppe e
@@ -89,15 +91,14 @@ instance Pretty e => Pretty (ExpF1 e) where
   ppe (Letrec bs e)              = parens $ text "letrec" <+> parens (vcat' (map ppe bs)) $+$ indent (ppe e)
   ppe (As e t)                   = parens $ ppe e <+> char ':' <+> ppe t
   ppe (Begin es e)               = parens $ text "begin" $+$ indent (vcat' $ map ppe es) $+$ indent (ppe e)
-  ppe (Repeat x a e1 e2 e b t)   =
+  ppe (Repeat x a e1 e2 e b (Ann _ t)) =
     parens $ text "repeat" <+> parens (text x <+> ppe e1 <+> ppe e2)
     <+> parens (case t of
                    BlankTy -> text a <+> ppe b
-                   _ -> text a <+> (char ':' <+> ppe t) <+> ppe b)
+                   _       -> text a <+> (char ':' <+> ppe t) <+> ppe b)
     $+$ ppe e
   ppe (Time e)                   = parens $ text "time" <+> ppe e
   ppe (P p)                      = ppe p
-  
 
 instance Pretty Operator where
   ppe Plus        = char '+'
@@ -147,32 +148,29 @@ instance Pretty Operator where
   ppe ReadFloat   = text "read-float"
   ppe ReadChar    = text "read-char"
   ppe DisplayChar = text "display-char"
-  
+
 instance Pretty Bool where
-  ppe True = text "#t"
+  ppe True  = text "#t"
   ppe False = text "#f"
 
-instance Pretty Type where
-  ppe BlankTy       = error "blank type should not be prettied"
-  ppe Dyn           = text "Dyn"
-  ppe CharTy        = text "Char"
-  ppe IntTy         = text "Int"
-  ppe FloatTy       = text "Float"
-  ppe BoolTy        = text "Bool"
-  ppe UnitTy        = text "()"
-  ppe (FunTy ts t)  = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
-  ppe (ArrTy ts t)  = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
+instance Pretty t => Pretty (Type t) where
+  ppe BlankTy      = error "blank type should not be prettied"
+  ppe Dyn          = text "Dyn"
+  ppe CharTy       = text "Char"
+  ppe IntTy        = text "Int"
+  ppe FloatTy      = text "Float"
+  ppe BoolTy       = text "Bool"
+  ppe UnitTy       = text "()"
+  ppe (FunTy ts t) = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
+  ppe (ArrTy ts t) = parens $ hsep (map ppe ts) <> text " -> " <> ppe t
   -- ppe (ArrTy _ _) = error "arrow type should not be prettied"
-  ppe (RefTy t)     = parens $ text "Ref" <+> ppe t
-  ppe (GRefTy t)    = parens $ text "GRef" <+> ppe t
-  ppe (MRefTy t)    = parens $ text "MRef" <+> ppe t
-  ppe (VectTy t)    = parens $ text "Vect" <+> ppe t
-  ppe (GVectTy t)   = parens $ text "GVect" <+> ppe t
-  ppe (MVectTy t)   = parens $ text "MVect" <+> ppe t
-  ppe (TupleTy ts)  = parens $ text "Tuple" <+> hsep (map ppe ts)
+  ppe (RefTy t)    = parens $ text "Ref" <+> ppe t
+  ppe (GRefTy t)   = parens $ text "GRef" <+> ppe t
+  ppe (MRefTy t)   = parens $ text "MRef" <+> ppe t
+  ppe (VectTy t)   = parens $ text "Vect" <+> ppe t
+  ppe (GVectTy t)  = parens $ text "GVect" <+> ppe t
+  ppe (MVectTy t)  = parens $ text "MVect" <+> ppe t
+  ppe (TupleTy ts) = parens $ text "Tuple" <+> hsep (map ppe ts)
 
 codeGen :: Pretty p => p -> String
 codeGen = render . ppe
-
-instance Show L1 where
-  show p = codeGen p

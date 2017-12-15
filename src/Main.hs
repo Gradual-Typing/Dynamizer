@@ -3,21 +3,24 @@
 
 module Main where
 
-import Data.Semigroup ((<>))
-import Options.Applicative ((<**>), execParser, info, helper, header, progDesc, fullDesc)
-import System.IO (openFile,hPutStrLn,IOMode(WriteMode),hClose)
-import System.Directory (createDirectoryIfMissing,removePathForcibly)
-import System.FilePath (dropExtension)
-import Text.Printf (hPrintf)
-import Control.Monad (foldM_)
-import Data.Monoid (Sum(..), Product(..))
+import           Control.Monad       (foldM_)
+import           Data.Monoid         (Product (..), Sum (..))
+import           Data.Semigroup      ((<>))
+import           Options.Applicative (execParser, fullDesc, header, helper,
+                                      info, progDesc, (<**>))
+import           System.Directory    (createDirectoryIfMissing,
+                                      removePathForcibly)
+import           System.FilePath     (dropExtension)
+import           System.IO           (IOMode (WriteMode), hClose, hPutStrLn,
+                                      openFile)
+import           Text.Printf         (hPrintf)
 
 
-import CmdOptions
-import Parser
-import Annotizer
-import CodeGen
-import Sampling
+import           CmdOptions
+import           CodeGen
+import           Lattice
+import           Parser
+import           Sampling
 
 writeLattice :: (Gradual p, Pretty p) => Int -> String -> [p] -> IO ()
 writeLattice b dname dps =

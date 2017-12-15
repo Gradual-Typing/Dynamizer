@@ -1,7 +1,7 @@
 module CmdOptions where
 
-import Options.Applicative
-import Data.Semigroup ((<>))
+import           Data.Semigroup      ((<>))
+import           Options.Applicative
 
 data Options = Options
   { sourceFilePath :: FilePath

@@ -1,22 +1,27 @@
-{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE DeriveFoldable       #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveTraversable    #-}
+{-# LANGUAGE FlexibleContexts     #-}
+{-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE StandaloneDeriving   #-}
+{-# LANGUAGE TemplateHaskell      #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Syntax(
-  SourcePos,
-  Name,
-  Args,
-  Operator(..),
-  Type(..),
-  Ann(..),
-  L,
-  foldAnn,
-  (⊑)) where
+  Name
+  , Operator(..)
+  , Type(..)
+  , ExpF(..)
+  , Prim(..)
+  , Ann(..)
+  , (⊑)) where
 
-import Text.Parsec.Pos (SourcePos)
-import Algebra.Lattice
+import           Algebra.Lattice
+import           Data.Bifunctor.TH
 
-type Name         = String
-type Args         = [Name]
+type Name = String
+type Args = [Name]
 
 data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ShiftR | ShiftL | BAnd | BOr
@@ -28,7 +33,63 @@ data Operator = Plus | Minus | Mult | Div | Eq | Ge | Gt | Le | Lt
               | ReadFloat | ReadChar | DisplayChar
                 deriving (Eq,Show)
 
-data Type =
+-- base functor (two-level types trick)
+-- structure operator
+data ExpF t e =
+  DConst Name t e
+  | DLam Name Args e t
+  | Lam Args e t
+  | Bind Name t e
+  | As e t
+  | Repeat Name Name e e e e t
+  | Op Operator [e]
+  | TopLevel [e] [e]
+  | If e e e
+  | App e [e]
+  | Ref e
+  | DeRef e
+  | Assign e e
+  | GRef e
+  | GDeRef e
+  | GAssign e e
+  | MRef e
+  | MDeRef e
+  | MAssign e e
+  | Vect e e -- length value
+  | VectRef e e -- vect pos
+  | VectSet e e e -- vect pos value
+  | GVect e e -- length value
+  | GVectRef e e -- vect pos
+  | GVectSet e e e -- vect pos value
+  | MVect e e
+  | MVectRef e e
+  | MVectSet e e e
+  | Tuple [e]
+  | TupleProj e Int
+  | Let [e] e
+  | Letrec [e] e
+  | Begin [e] e
+  | Time e
+  | P Prim
+
+data Prim =
+  Var Name
+  | N Integer
+  | F Double String
+  | B Bool
+  | Unit
+  | C String
+  deriving (Eq, Show)
+
+deriving instance Functor (ExpF t)
+deriving instance Foldable (ExpF t)
+deriving instance Traversable (ExpF t)
+
+$(deriveBifunctor ''ExpF)
+$(deriveBifoldable ''ExpF)
+$(deriveBitraversable ''ExpF)
+
+data Type t =
   BlankTy
   | Dyn
   | CharTy
@@ -36,18 +97,21 @@ data Type =
   | FloatTy
   | BoolTy
   | UnitTy
-  | FunTy [Type] Type
-  | ArrTy [Type] Type
-  | RefTy Type
-  | GRefTy Type
-  | MRefTy Type
-  | VectTy Type
-  | GVectTy Type
-  | MVectTy Type
-  | TupleTy [Type]
+  | FunTy [t] t
+  | ArrTy [t] t
+  | RefTy t
+  | GRefTy t
+  | MRefTy t
+  | VectTy t
+  | GVectTy t
+  | MVectTy t
+  | TupleTy [t]
   deriving (Eq,Show)
 
-instance MeetSemiLattice Type where
+deriving instance (Show a, Show (e (Ann a e))) => Show (Ann a e)
+deriving instance (Show a, Show (t (Ann a t))) => Show (ExpF (Ann a t) (Ann a (ExpF (Ann a t))))
+
+instance (MeetSemiLattice t, Show t) => MeetSemiLattice (Type t) where
   Dyn /\ t                           = t
   t /\ Dyn                           = t
   CharTy /\ CharTy                   = CharTy
@@ -69,7 +133,7 @@ instance MeetSemiLattice Type where
   t1 /\ t2                             =
     error ("/\\: undefined on " ++ show t1 ++ " and " ++ show t2)
 
-instance JoinSemiLattice Type where
+instance (JoinSemiLattice t, Show t) => JoinSemiLattice (Type t) where
   Dyn \/ _                           = Dyn
   _ \/ Dyn                           = Dyn
   CharTy \/ CharTy                   = CharTy
@@ -91,20 +155,22 @@ instance JoinSemiLattice Type where
   t1 \/ t2                           =
     error ("\\/: undefined on " ++ show t1 ++ " and " ++ show t2)
 
-instance Lattice Type where
+instance (JoinSemiLattice t, MeetSemiLattice t, Show t) => Lattice (Type t) where
 
-(⊑) :: Type -> Type -> Bool
+(⊑) :: (Eq t, Show t, JoinSemiLattice t) => Type t -> Type t -> Bool
 (⊑) = joinLeq
 
 data Ann a e = Ann a (e (Ann a e))
 
-type L a = Ann SourcePos a
+-- foldAnn :: Functor e => (a -> e r -> r) -> Ann a e -> r
+-- foldAnn f (Ann a e) = f a (fmap (foldAnn f) e)
+
+-- mapExp :: (ExpF t1 (Ann a (ExpF t2)) -> ExpF t2 (Ann a (ExpF t2)))
+--        -> Ann a (ExpF t1)
+--        -> Ann a (ExpF t2)
+-- mapExp f = foldAnn (\a e -> Ann a $ f e)
 
 -- type AnnT a e = Fix (Compose ((,) a) e)
-
-foldAnn :: Functor e => (a -> e r -> r) -> Ann a e -> r
-foldAnn f (Ann a e) = f a (fmap (foldAnn f) e)
-
 -- pattern Ann a e = Fix (Compose (a,e))
 
 -- traverseAnn :: (Applicative f, Functor e1) => (a -> e1 (f (Ann b e2)) -> f (Ann b e2)) -> Ann a e1 -> f (Ann b e2)
