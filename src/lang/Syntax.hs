@@ -6,7 +6,6 @@
 {-# LANGUAGE StandaloneDeriving   #-}
 {-# LANGUAGE TemplateHaskell      #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module Syntax(
   Name
@@ -106,7 +105,7 @@ data Type t =
   | GVectTy t
   | MVectTy t
   | TupleTy [t]
-  deriving (Eq,Show)
+  deriving (Eq,Show,Functor)
 
 deriving instance (Show a, Show (e (Ann a e))) => Show (Ann a e)
 deriving instance (Show a, Show (t (Ann a t))) => Show (ExpF (Ann a t) (Ann a (ExpF (Ann a t))))
@@ -161,17 +160,3 @@ instance (JoinSemiLattice t, MeetSemiLattice t, Show t) => Lattice (Type t) wher
 (⊑) = joinLeq
 
 data Ann a e = Ann a (e (Ann a e))
-
--- foldAnn :: Functor e => (a -> e r -> r) -> Ann a e -> r
--- foldAnn f (Ann a e) = f a (fmap (foldAnn f) e)
-
--- mapExp :: (ExpF t1 (Ann a (ExpF t2)) -> ExpF t2 (Ann a (ExpF t2)))
---        -> Ann a (ExpF t1)
---        -> Ann a (ExpF t2)
--- mapExp f = foldAnn (\a e -> Ann a $ f e)
-
--- type AnnT a e = Fix (Compose ((,) a) e)
--- pattern Ann a e = Fix (Compose (a,e))
-
--- traverseAnn :: (Applicative f, Functor e1) => (a -> e1 (f (Ann b e2)) -> f (Ann b e2)) -> Ann a e1 -> f (Ann b e2)
--- traverseAnn f (Ann a e) = f a (fmap (traverseAnn f) e)

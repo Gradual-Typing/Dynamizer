@@ -1,5 +1,3 @@
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
-
 module L1( TypeWithLoc
          , ExpF1
          , L1) where

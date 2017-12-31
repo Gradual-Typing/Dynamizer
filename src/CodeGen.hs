@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
 
 module CodeGen (
   codeGen
@@ -40,7 +39,7 @@ pparg :: Name -> Ann a Type -> Doc
 pparg a (Ann _ BlankTy) = ppe a
 pparg a t               = lbrack <> ppe a <+> char ':' <+> ppe t <> rbrack
 
-instance (Pretty e, Show (Ann a Type)) => Pretty (ExpF (Ann a Type) e) where
+instance (Pretty e, Show a) => Pretty (ExpF (Ann a Type) e) where
   ppe (Op op es)                 = parens $ ppe op <+> hsep (map ppe es)
   ppe (If e1 e2 e3)              = parens $ text "if" <+> ppe e1 $+$ indent (ppe e2) $+$ indent (ppe e3)
   ppe (App e1 es)                = parens $ ppe e1 <+> hsep (map ppe es)
@@ -63,7 +62,7 @@ instance (Pretty e, Show (Ann a Type)) => Pretty (ExpF (Ann a Type) e) where
        BlankTy -> empty
        _       -> char ':' <+> ppe t)
     $+$ indent (ppe e)
-  ppe (DLam x _ _ t)             = error (x ++ " is defined as lambda but has type: " ++ show t)
+  ppe (DLam x _ _ (Ann _ t))     = error (x ++ " is defined as lambda but has type: " ++ show t)
   ppe (Bind x (Ann _ BlankTy) e) = brackets (text x $+$ indent (ppe e))
   ppe (Bind x t e)               =
     brackets (text x <+> char ':' <+> ppe t $+$ indent (ppe e))

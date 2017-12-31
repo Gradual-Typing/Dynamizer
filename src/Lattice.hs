@@ -3,34 +3,37 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
+{-# LANGUAGE ViewPatterns         #-}
 
 module Lattice where
 
 import           Control.Arrow      ((***))
+import           Control.Monad.CSP  (allCSPSolutions, constraint, mkDV)
 import           Data.Bifoldable    (Bifoldable, bifoldMap)
 import           Data.Bifunctor     (bimap)
 import           Data.Bitraversable (bitraverse)
 import qualified Data.DList         as DL
+import           Data.List          (transpose)
 import qualified Data.Map.Strict    as M
 import           Data.Maybe         (fromMaybe)
 import           Data.Monoid        (Product (..), Sum (..))
 
 import           Syntax
 
+
 embedLocalLattice :: forall a t. Gradual (t (Ann a t))
                   => Ann a (ExpF (Ann a t))
-                  -> Ann a (ExpF ([Ann a t], Ann a t))
+                  -> Ann a (ExpF (DL.DList (Ann a t), Ann a t))
 embedLocalLattice (Ann s e) = Ann s $ bimap (\t -> (lattice t, t)) embedLocalLattice e
 
 pick :: forall a t. (Gradual (t (Ann a t)), Ord a)
-  => Ann a (ExpF ([Ann a t], Ann a t))
+  => Ann a (ExpF (DL.DList (Ann a t), Ann a t))
   -> M.Map a Int
   -> Ann a (ExpF (Ann a t))
 pick (Ann s e) src2indx = Ann s $ bimap pick' (`pick` src2indx) e
   where
-    pick' :: ([Ann a t], Ann a t) -> Ann a t
-    pick' (ts, t@(Ann s' _)) = maybe t (ts !!) $ M.lookup s' src2indx
+    pick' :: (DL.DList (Ann a t), Ann a t) -> Ann a t
+    pick' (DL.toList -> ts, t@(Ann s' _)) = maybe t (ts !!) $ M.lookup s' src2indx
 
 replaceTypes :: forall a. Ord a
   => M.Map a (Ann a Type)
@@ -47,7 +50,7 @@ replaceTypes src2ty (Ann s e) = Ann s $ bimap replaceTypes' (replaceTypes src2ty
 
 class Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
-  lattice :: p -> [p]
+  lattice :: p -> DL.DList p
   -- Counts the number of less percise programs and the number of
   -- all type constructors
   count   :: p -> (Product Integer, Sum Int)
@@ -62,8 +65,8 @@ class Gradual p where
 
 instance Gradual (e (Ann a e)) => Gradual (Ann a e) where
   lattice (Ann i e) = Ann i <$> lattice e
-  count (Ann _ e)   = count e
-  static (Ann _ e)  = static e
+  count   (Ann _ e) = count e
+  static  (Ann _ e) = static e
 
 instance (Gradual t, Gradual e) => Gradual (ExpF t e) where
   lattice = bitraverse lattice pure
@@ -71,17 +74,22 @@ instance (Gradual t, Gradual e) => Gradual (ExpF t e) where
   static  = bifoldMap static static
 
 instance Gradual t => Gradual (Type t) where
-  lattice (RefTy t)     = Dyn:(RefTy <$> lattice t)
-  lattice (GRefTy t)    = Dyn:(GRefTy <$> lattice t)
-  lattice (MRefTy t)    = Dyn:(MRefTy <$> lattice t)
-  lattice (VectTy t)    = Dyn:(VectTy <$> lattice t)
-  lattice (GVectTy t)   = Dyn:(GVectTy <$> lattice t)
-  lattice (MVectTy t)   = Dyn:(MVectTy <$> lattice t)
-  lattice (FunTy t1 t2) = Dyn:(FunTy <$> mapM lattice t1 <*> lattice t2)
+  lattice (RefTy t)     = DL.cons Dyn (RefTy <$> lattice t)
+  lattice (GRefTy t)    = DL.cons Dyn (GRefTy <$> lattice t)
+  lattice (MRefTy t)    = DL.cons Dyn (MRefTy <$> lattice t)
+  lattice (VectTy t)    = DL.cons Dyn (VectTy <$> lattice t)
+  lattice (GVectTy t)   = DL.cons Dyn (GVectTy <$> lattice t)
+  lattice (MVectTy t)   = DL.cons Dyn (MVectTy <$> lattice t)
+  lattice (FunTy t1 t2) = DL.cons Dyn (FunTy <$> mapM lattice t1 <*> lattice t2)
   lattice (ArrTy t1 t2) = ArrTy <$> mapM lattice t1 <*> lattice t2
-  lattice (TupleTy ts)  = Dyn:(TupleTy <$> mapM lattice ts)
-  lattice Dyn           = [Dyn]
-  lattice t             = [Dyn,t]
+  lattice (TupleTy ts)  = DL.cons Dyn (TupleTy <$> mapM lattice ts)
+  lattice CharTy        = DL.fromList [Dyn, CharTy]
+  lattice IntTy         = DL.fromList [Dyn, IntTy]
+  lattice FloatTy       = DL.fromList [Dyn, FloatTy]
+  lattice BoolTy        = DL.fromList [Dyn, BoolTy]
+  lattice UnitTy        = DL.fromList [Dyn, UnitTy]
+  lattice Dyn           = DL.singleton Dyn
+  lattice BlankTy       = DL.singleton BlankTy
 
   count (RefTy t)     = ((+1) *** (+1)) $ count t
   count (GRefTy t)    = ((+1) *** (+1)) $ count t
@@ -101,9 +109,20 @@ instance Gradual t => Gradual (Type t) where
                         in (1 + product (map fst c1),
                             1 + sum (map snd c1))
   count Dyn           = (1, 1)
-  count _             = (2, 1)
+  count BlankTy       = (1, 1)
+  count CharTy        = (2, 1)
+  count IntTy         = (2, 1)
+  count FloatTy       = (2, 1)
+  count BoolTy        = (2, 1)
+  count UnitTy        = (2, 1)
 
   static Dyn           = 0
+  static BlankTy       = 0
+  static CharTy        = 1
+  static IntTy         = 1
+  static FloatTy       = 1
+  static BoolTy        = 1
+  static UnitTy        = 1
   static (RefTy t)     = 1 + static t
   static (GRefTy t)    = 1 + static t
   static (MRefTy t)    = 1 + static t
@@ -113,24 +132,96 @@ instance Gradual t => Gradual (Type t) where
   static (FunTy t1 t2) = 1 + sum (map static (t2:t1))
   static (ArrTy t1 t2) = sum (map static (t2:t1))
   static (TupleTy ts)  = 1 + sum (map static ts)
-  static _             = 1
 
-data LatticeInfo a t =  LatticeInfo { annotation        :: a
-                                    , nodesCount        :: Int
-                                    , nodesCountLattice :: [Int]
-                                    , latticeList       :: [Ann a t]
-                                    }
-
-genLatticeInfo :: forall e t a. (Gradual (t (Ann a t)), Bifoldable e)
-               => Ann a (e (Ann a t))
-               -> ([LatticeInfo a t], Int)
+genLatticeInfo :: forall e a. Bifoldable e
+               => Ann a (e (Ann a Type))
+               -> ([Ann (Int, a) Type], Int)
 genLatticeInfo = (DL.toList *** getSum) . localLattice
   where
-    localLattice :: Ann a (e (Ann a t)) -> (DL.DList (LatticeInfo a t), Sum Int)
+    localLattice :: Ann a (e (Ann a Type)) -> (DL.DList (Ann (Int, a) Type), Sum Int)
     localLattice (Ann _ e) = bifoldMap f localLattice e
 
-    f :: Ann a t -> (DL.DList (LatticeInfo a t), Sum Int)
-    f t@(Ann a _) =
-      let ts = lattice t
-          nodesCount' = static t
-      in (DL.singleton (LatticeInfo a (getSum nodesCount') (map (getSum . static) ts) ts), nodesCount')
+    f :: Ann a Type -> (DL.DList (Ann (Int, a) Type), Sum Int)
+    f t = (DL.singleton ct, Sum n)
+      where ct@(Ann (n, _) _) = addCount t
+
+getCount :: forall a. Ann (Int, a) Type -> Int
+getCount (Ann (x,_) _) = x
+
+getAnn :: forall a b. Ann (b, a) Type -> a
+getAnn (Ann (_,a) _) = a
+
+addCount :: forall a. Ann a Type -> Ann (Int, a) Type
+addCount = bottomUp f
+  where
+    bottomUp :: (a -> Type (Ann (Int, a) Type) -> Ann (Int, a) Type)
+             -> Ann a Type
+             -> Ann (Int, a) Type
+    bottomUp fn (Ann a t) = fn a $ bottomUp fn <$> t
+
+    f :: a -> Type (Ann (Int, a) Type) -> Ann (Int, a) Type
+    f a BlankTy = Ann (0, a) BlankTy
+    f a Dyn     = Ann (0, a) Dyn
+    f a CharTy  = Ann (1, a) CharTy
+    f a IntTy   = Ann (1, a) IntTy
+    f a FloatTy = Ann (1, a) FloatTy
+    f a BoolTy  = Ann (1, a) BoolTy
+    f a UnitTy  = Ann (1, a) UnitTy
+    f a t@(RefTy (Ann (n, _) _))   = Ann (n+1, a) t
+    f a t@(GRefTy (Ann (n, _) _))  = Ann (n+1, a) t
+    f a t@(MRefTy (Ann (n, _) _))  = Ann (n+1, a) t
+    f a t@(VectTy (Ann (n, _) _))  = Ann (n+1, a) t
+    f a t@(GVectTy (Ann (n, _) _)) = Ann (n+1, a) t
+    f a t@(MVectTy (Ann (n, _) _)) = Ann (n+1, a) t
+    f a t@(FunTy ts rt) = Ann ((+) 1 $ sum $ map getCount (rt:ts), a) t
+    f a t@(ArrTy ts rt) = Ann (sum $ map getCount (rt:ts), a) t
+    f a t@(TupleTy ts)  = Ann ((+) 1 $ sum $ map getCount ts, a) t
+
+genLessPreciseType :: forall a. Int -> Ann (Int, a) Type -> [Ann a Type]
+genLessPreciseType nodes ty'@(Ann (n'', _) _) | nodes < 0 || nodes > n'' = []
+                                              | otherwise = f ty' nodes
+  where
+    stripCount :: Ann (Int, a) Type -> Ann a Type
+    stripCount (Ann (_, a) t) = Ann a $ stripCount <$> t
+
+    -- generate $ns' such that (sum ns') = $n-1, each number in ns' <= the
+    -- corresponding number in $ns, and there is y, y' \in $ns' that are
+    -- different in each combination.
+    gen :: Int -> [Int] -> [[Int]]
+    gen n ns = allCSPSolutions $ do
+      dvs <- mapM (\a -> mkDV [0 .. a]) ns
+      constraint ((== n) . sum) dvs
+      return dvs
+
+    f :: Ann (Int, a) Type -> Int -> [Ann a Type]
+    f (Ann _ Dyn)               _ = error "genLessPreciseType: unexpected Dyn"
+    f (Ann _ (ArrTy _ _))       0 = []
+    f t@(Ann (n', a) _)         n | n == n' = [stripCount t] -- otherwise n < n'
+                                  | n == 0  = [Ann a Dyn]
+    f (Ann (_, a) BlankTy)      _ = [Ann a BlankTy]
+    f (Ann (_, a) CharTy)       _ = [Ann a CharTy]
+    f (Ann (_, a) IntTy)        _ = [Ann a IntTy]
+    f (Ann (_, a) FloatTy)      _ = [Ann a FloatTy]
+    f (Ann (_, a) BoolTy)       _ = [Ann a BoolTy]
+    f (Ann (_, a) UnitTy)       _ = [Ann a UnitTy]
+    f (Ann (_, a) (RefTy t))    n = (Ann a . RefTy) <$> f t (n-1)
+    f (Ann (_, a) (GRefTy t))   n = (Ann a . GRefTy) <$> f t (n-1)
+    f (Ann (_, a) (MRefTy t))   n = (Ann a . MRefTy) <$> f t (n-1)
+    f (Ann (_, a) (VectTy t))   n = (Ann a . VectTy) <$> f t (n-1)
+    f (Ann (_, a) (GVectTy t))  n = (Ann a . GVectTy) <$> f t (n-1)
+    f (Ann (_, a) (MVectTy t))  n = (Ann a . MVectTy) <$> f t (n-1)
+    f (Ann (_, a) (FunTy ts t)) n = g a (n-1) FunTy (t:ts)
+    f (Ann (_, a) (ArrTy ts t)) n = g a n ArrTy (t:ts)
+    f (Ann (_, a) (TupleTy ts)) n =
+      map (Ann a) $ concatMap (map TupleTy . transpose . zipWith f ts) $ gen (n-1) $ map getCount ts
+
+    g :: a
+      -> Int
+      -> ([Ann a Type] -> Ann a Type -> Type (Ann a Type))
+      -> [Ann (Int, a) Type]
+      -> [Ann a Type]
+    g a n c ts =
+      let temp :: [[[Ann a Type]]] = map (zipWith f ts) $ gen n $ map getCount ts
+          rts  :: [[Ann a Type]]   = map head temp
+          args :: [[[Ann a Type]]] = map tail temp
+      in map (Ann a) $ concat $ zipWith (zipWith c) (map transpose args) rts

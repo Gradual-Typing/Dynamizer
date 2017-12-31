@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleInstances         #-}
 {-# LANGUAGE MultiParamTypeClasses     #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# OPTIONS_GHC -Wall -fno-warn-orphans -fno-warn-unused-do-bind #-}
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 
 -- TODO: add state for bound variables to check for unbound
 
@@ -162,9 +162,8 @@ floatParser = do
   int <- integer1
   dec <- decimal
   ex  <- expon
-  let s = i ++ int ++ dec ++ ex
-      f = rd s
-  annotate $ return $ P $ F f s
+  let s = int ++ dec ++ ex
+  annotate $ return $ P $ F (rd s) (i ++ s)
     where rd       = read :: String -> Double
           decimal  = option "" $ char '.' <:> number
           expon = option "" $ oneOf "eE" <:> integer1

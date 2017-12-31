@@ -1,9 +1,9 @@
-{-# OPTIONS_GHC -fno-warn-type-defaults #-}
-{-# OPTIONS_GHC -Wall -fno-warn-orphans #-}
+
 
 module Main where
 
 import           Control.Monad       (foldM_)
+import qualified Data.DList          as DL
 import           Data.Monoid         (Product (..), Sum (..))
 import           Data.Semigroup      ((<>))
 import           Options.Applicative (execParser, fullDesc, header, helper,
@@ -44,7 +44,7 @@ greet (Options srcFilePath ns nb) = do
       putStrLn ("There are " ++ show (getProduct a) ++ " less precisely typed programs and " ++ show w ++ " type constructors")
       writeLattice w dirPath $ samplingMode a e
   where samplingMode a e
-          | ns < 0 = lattice e
+          | ns < 0 = DL.toList $ lattice e
           | nb == 1 = if a > 10000
             then sampleUniformally e ns
             else sampleUniformally' e ns
