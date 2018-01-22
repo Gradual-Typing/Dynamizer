@@ -5,20 +5,20 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns         #-}
 
-module Lattice where
+module Dynamizer.Lattice where
 
-import           Control.Arrow      ((***))
-import           Control.Monad.CSP  (allCSPSolutions, constraint, mkDV)
-import           Data.Bifoldable    (Bifoldable, bifoldMap)
-import           Data.Bifunctor     (bimap)
-import           Data.Bitraversable (bitraverse)
-import qualified Data.DList         as DL
-import           Data.List          (transpose)
-import qualified Data.Map.Strict    as M
-import           Data.Maybe         (fromMaybe)
-import           Data.Monoid        (Product (..), Sum (..))
+import           Control.Arrow         ((***))
+import           Control.Monad.CSP     (allCSPSolutions, constraint, mkDV)
+import           Data.Bifoldable       (Bifoldable, bifoldMap)
+import           Data.Bifunctor        (bimap)
+import           Data.Bitraversable    (bitraverse)
+import qualified Data.DList            as DL
+import           Data.List             (transpose)
+import qualified Data.Map.Strict       as M
+import           Data.Maybe            (fromMaybe)
+import           Data.Monoid           (Product (..), Sum (..))
 
-import           Syntax
+import           Dynamizer.Lang.Syntax
 
 
 embedLocalLattice :: forall a t. Gradual (t (Ann a t))
@@ -177,13 +177,13 @@ addCount = bottomUp f
     f a t@(ArrTy ts rt) = Ann (sum $ map getCount (rt:ts), a) t
     f a t@(TupleTy ts)  = Ann ((+) 1 $ sum $ map getCount ts, a) t
 
+stripCount :: Ann (Int, a) Type -> Ann a Type
+stripCount (Ann (_, a) t) = Ann a $ stripCount <$> t
+
 genLessPreciseType :: forall a. Int -> Ann (Int, a) Type -> [Ann a Type]
 genLessPreciseType nodes ty'@(Ann (n'', _) _) | nodes < 0 || nodes > n'' = []
                                               | otherwise = f ty' nodes
   where
-    stripCount :: Ann (Int, a) Type -> Ann a Type
-    stripCount (Ann (_, a) t) = Ann a $ stripCount <$> t
-
     -- generate $ns' such that (sum ns') = $n-1, each number in ns' <= the
     -- corresponding number in $ns, and there is y, y' \in $ns' that are
     -- different in each combination.

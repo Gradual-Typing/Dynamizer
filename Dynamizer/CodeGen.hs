@@ -3,14 +3,14 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module CodeGen (
+module Dynamizer.CodeGen (
   codeGen
   , Pretty
   ) where
 
 import           Text.PrettyPrint
 
-import           Syntax
+import           Dynamizer.Lang.Syntax
 
 indent :: Doc -> Doc
 indent = nest 2

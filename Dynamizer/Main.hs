@@ -17,10 +17,10 @@ import           Text.Printf         (hPrintf)
 
 
 import           CmdOptions
-import           CodeGen
-import           Lattice
-import           Parser
-import           Sampling
+import           Dynamizer.CodeGen
+import           Dynamizer.Lattice
+import           Dynamizer.Parser
+import           Dynamizer.Sampling
 
 writeLattice :: (Gradual p, Pretty p) => Int -> String -> [p] -> IO ()
 writeLattice b dname dps =
@@ -42,13 +42,14 @@ greet (Options srcFilePath ns nb) = do
           w       = getSum w'
           dirPath = dropExtension srcFilePath ++ "/"
       putStrLn ("There are " ++ show (getProduct a) ++ " less precisely typed programs and " ++ show w ++ " type constructors")
-      writeLattice w dirPath $ samplingMode a e
+      l <- samplingMode a e
+      writeLattice w dirPath l
   where samplingMode a e
-          | ns < 0 = DL.toList $ lattice e
+          | ns < 0 = return $ DL.toList $ lattice e
           | nb == 1 = if a > 10000
-            then sampleUniformally e ns
-            else sampleUniformally' e ns
-          | otherwise = concat $ sampleFromBins e ns nb
+            then return $ sampleUniformally e ns
+            else return $ sampleUniformally' e ns
+          | otherwise = concat <$> sampleFromBins e ns nb
 
 main :: IO ()
 main = greet =<< execParser opts

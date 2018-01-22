@@ -6,14 +6,14 @@
 
 -- TODO: add state for bound variables to check for unbound
 
-module Parser (parser) where
+module Dynamizer.Parser (parser) where
 
 import           Control.Monad      (void)
 import           Text.Parsec
 import           Text.Parsec.String (Parser)
 
-import           L1
-import           Syntax
+import           Dynamizer.Lang.L1
+import           Dynamizer.Lang.Syntax
 
 -- sorted
 reservedNames :: [String]

@@ -7,7 +7,7 @@
 {-# LANGUAGE TemplateHaskell      #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Syntax(
+module Dynamizer.Lang.Syntax(
   Name
   , Operator(..)
   , Type(..)

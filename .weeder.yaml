@@ -1,0 +1,20 @@
+- package:
+  - name: dynamizer
+  - section:
+    - name: exe:dynamizer
+    - message:
+      - name: Module not compiled
+      - module:
+        - CmdOptions
+        - Main.hs
+    - message:
+      - name: Redundant build-depends entry
+      - depends:
+        - base
+        - containers
+        - directory
+        - dlist
+        - dynamizer
+        - filepath
+        - optparse-applicative
+

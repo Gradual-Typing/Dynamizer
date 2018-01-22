@@ -1,10 +1,10 @@
-module L1( TypeWithLoc
+module Dynamizer.Lang.L1( TypeWithLoc
          , ExpF1
          , L1) where
 
 import           Text.Parsec.Pos (SourcePos)
 
-import           Syntax
+import           Dynamizer.Lang.Syntax
 
 type WithLoc a = Ann SourcePos a
 
