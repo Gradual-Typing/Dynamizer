@@ -25,7 +25,8 @@ import           System.Random.MWC            (withSystemRandom)
 import           System.Random.Shuffle        (shuffle')
 import           System.Random.TF             (seedTFGen)
 
-import           Dynamizer.Lang.Syntax
+import           Language.Grift.Source.Syntax
+
 import           Dynamizer.Lattice
 
 

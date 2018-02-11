@@ -15,11 +15,11 @@ import           System.IO           (IOMode (WriteMode), hClose, hPutStrLn,
                                       openFile)
 import           Text.Printf         (hPrintf)
 
+import           Language.Grift.Source.Pretty
+import           Language.Grift.Source.Parser
 
 import           CmdOptions
-import           Dynamizer.CodeGen
 import           Dynamizer.Lattice
-import           Dynamizer.Parser
 import           Dynamizer.Sampling
 
 writeLattice :: (Gradual p, Pretty p) => Int -> String -> [p] -> IO ()

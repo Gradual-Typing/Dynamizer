@@ -3,4 +3,6 @@ packages:
 - '.'
 extra-deps:
 - random-extras-0.19
-resolver: lts-10.3
+- git: git@github.com:Gradual-Typing/language-grift.git
+  commit: cfb070ae73baa9b7cdf6da8ab7e3decdd845298c
+resolver: lts-10.5

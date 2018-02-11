@@ -21,7 +21,8 @@ import           System.Random.TF          (seedTFGen)
 import           Test.QuickCheck
 import           Test.QuickCheck.Monadic
 
-import           Dynamizer.Lang.Syntax
+import           Language.Grift.Source.Syntax
+
 import           Dynamizer.Lattice
 import           Dynamizer.Sampling
 

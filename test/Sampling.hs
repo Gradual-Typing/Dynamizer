@@ -9,7 +9,8 @@ import           Numeric.Interval      (Interval)
 import           System.Random         (RandomGen (..))
 import           System.Random.MWC     (withSystemRandom)
 
-import           Dynamizer.Lang.Syntax
+import           Language.Grift.Source.Syntax
+
 import           Dynamizer.Lattice
 import           Dynamizer.Sampling
 

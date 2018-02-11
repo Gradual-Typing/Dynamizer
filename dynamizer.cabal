@@ -20,11 +20,7 @@ Source-repository head
    location: git://github.com/Gradual-Typing/Dynamizer.git
 
 library
-  exposed-modules:     Dynamizer.CodeGen
-                     , Dynamizer.Lang.L1
-                     , Dynamizer.Lang.Syntax
-                     , Dynamizer.Lattice
-                     , Dynamizer.Parser
+  exposed-modules:     Dynamizer.Lattice
                      , Dynamizer.Sampling
   build-depends:       base
                      , bifunctors
@@ -32,6 +28,7 @@ library
                      , csp
                      , dlist
                      , intervals
+                     , language-grift
                      , lattices
                      , mwc-random
                      , parsec
@@ -56,6 +53,7 @@ executable dynamizer
                      , dlist
                      , dynamizer
                      , filepath
+                     , language-grift
                      , optparse-applicative
   hs-source-dirs:      Dynamizer
   default-language:    Haskell2010
@@ -71,9 +69,10 @@ test-suite test
                      , dynamizer
                      , generic-random
                      , intervals
+                     , language-grift
+                     , mwc-random
                      , QuickCheck
                      , random
-                     , mwc-random
                      , random-fu
                      , tf-random
                      , transformers

@@ -18,7 +18,7 @@ import qualified Data.Map.Strict       as M
 import           Data.Maybe            (fromMaybe)
 import           Data.Monoid           (Product (..), Sum (..))
 
-import           Dynamizer.Lang.Syntax
+import           Language.Grift.Source.Syntax
 
 
 embedLocalLattice :: forall a t. Gradual (t (Ann a t))
