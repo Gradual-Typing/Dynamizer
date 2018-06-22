@@ -33,7 +33,7 @@ writeLattice b dname dps =
             return (n+1)) (0 :: Int) dps
 
 greet :: Options -> IO ()
-greet (Options srcFilePath ns nb) = do
+greet (Options srcFilePath ns nb coarse) = do
   p <- readFile srcFilePath
   case parser p of
     Left err -> print err
@@ -42,9 +42,10 @@ greet (Options srcFilePath ns nb) = do
           w       = getSum w'
           dirPath = dropExtension srcFilePath ++ "/"
       putStrLn ("There are " ++ show (getProduct a) ++ " less precisely typed programs and " ++ show w ++ " type constructors")
-      l <- samplingMode a e
+      l <- executionMode a e
       writeLattice w dirPath l
-  where samplingMode a e
+  where executionMode a e
+          | coarse = return $ DL.toList $ funLattice e
           | ns < 0 = return $ DL.toList $ lattice e
           | nb == 1 = if a > 10000
             then return $ sampleUniformally e ns
