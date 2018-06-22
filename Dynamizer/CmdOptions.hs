@@ -6,7 +6,8 @@ import           Options.Applicative
 data Options = Options
   { sourceFilePath :: FilePath
   , samplesCount   :: Int
-  , binsCount      :: Double}
+  , binsCount      :: Double
+  , coarseGrained  :: Bool}
 
 options :: Parser Options
 options = Options
@@ -23,4 +24,8 @@ options = Options
          <> help "Number of bins"
          <> showDefault
          <> value 1
-         <> metavar "BINS" )
+         <> metavar "BINS")
+      <*> switch
+          ( long "coarse"
+         <> help "Enable coarse grained lattice"
+         <> showDefault)
