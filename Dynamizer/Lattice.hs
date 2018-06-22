@@ -1,5 +1,6 @@
 {-# LANGUAGE FlexibleContexts     #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE OverloadedLists    #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -48,9 +49,25 @@ replaceTypes src2ty (Ann s e) = Ann s $ bimap replaceTypes' (replaceTypes src2ty
     replaceTypes' :: Ann a Type -> Ann a Type
     replaceTypes' (Ann s' t) = fromMaybe (dyn s' t) $ M.lookup s' src2ty
 
+class Dynamize p where
+  dynamize :: p -> p
+
+instance Dynamize (e (Ann a e)) => Dynamize (Ann a e) where
+  dynamize (Ann a e) = Ann a $ dynamize e
+
+instance (Dynamize t, Dynamize e) => Dynamize (ExpF t e) where
+  dynamize = bimap dynamize dynamize
+
+instance Dynamize (Type (Ann a Type)) where
+  dynamize (ArrTy ts (Ann a _)) = ArrTy (map (\(Ann a' _) -> Ann a' Dyn) ts) $ Ann a Dyn
+  dynamize _ = Dyn
+
 class Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
   lattice :: p -> DL.DList p
+  -- Generates the lattice of all coarce grained gradual typing on the function
+  -- level
+  funLattice :: p -> DL.DList p
   -- Counts the number of less percise programs and the number of
   -- all type constructors
   count   :: p -> (Product Integer, Sum Int)
@@ -64,14 +81,19 @@ class Gradual p where
   static  :: p -> Sum Int
 
 instance Gradual (e (Ann a e)) => Gradual (Ann a e) where
-  lattice (Ann i e) = Ann i <$> lattice e
-  count   (Ann _ e) = count e
-  static  (Ann _ e) = static e
+  lattice (Ann i e)    = Ann i <$> lattice e
+  funLattice (Ann a e) = Ann a <$> funLattice e
+  count   (Ann _ e)    = count e
+  static  (Ann _ e)    = static e
 
-instance (Gradual t, Gradual e) => Gradual (ExpF t e) where
+instance (Gradual t, Gradual e, Dynamize t, Dynamize e) => Gradual (ExpF t e) where
   lattice = bitraverse lattice pure
   count   = bifoldMap count count
   static  = bifoldMap static static
+
+  funLattice e@(DLam name args e' t) = [e, DLam name args (dynamize e') $ dynamize t]
+  funLattice e@(Lam args body t) = [e, Lam args (dynamize body) $ dynamize t]
+  funLattice e = bitraverse pure funLattice e
 
 instance Gradual t => Gradual (Type t) where
   lattice (RefTy t)     = DL.cons Dyn (RefTy <$> lattice t)
@@ -90,6 +112,8 @@ instance Gradual t => Gradual (Type t) where
   lattice UnitTy        = DL.fromList [Dyn, UnitTy]
   lattice Dyn           = DL.singleton Dyn
   lattice BlankTy       = DL.singleton BlankTy
+
+  funLattice _ = error "funLattice is undefined over arbitrary types"
 
   count (RefTy t)     = ((+1) *** (+1)) $ count t
   count (GRefTy t)    = ((+1) *** (+1)) $ count t
