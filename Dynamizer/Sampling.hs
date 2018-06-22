@@ -47,7 +47,7 @@ sampleUniformally e ns = map (pick (embedLocalLattice e) . M.fromList . zip tps)
     rns = transpose $ zipWith5 (\n a b c d -> randomList (0,n) ns $ seedTFGen (a,b,c,d)) tns [0..] [11..] [22..] [33..]
 
 -- | Sample partially-typed versions uniformally. It generates the full lattice before sampling.
-sampleUniformally' :: forall a t. Gradual (t (Ann a t))
+sampleUniformally' :: forall a t. (Gradual (t (Ann a t)), Dynamize (t (Ann a t)))
                    => Ann a (ExpF (Ann a t))   -- ^ The fully-statically typed AST to sample from
                    -> Int                      -- ^ The number of samples
                    -> [Ann a (ExpF (Ann a t))] -- ^ The list of samples
