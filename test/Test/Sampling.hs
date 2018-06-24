@@ -1,7 +1,7 @@
 {-# LANGUAGE RankNTypes       #-}
 {-# LANGUAGE TypeApplications #-}
 
-module Sampling where
+module Test.Sampling where
 
 import           Data.Monoid           (getSum)
 import           Data.Random.RVar      (runRVar)
