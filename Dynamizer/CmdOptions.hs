@@ -7,7 +7,8 @@ data Options = Options
   { sourceFilePath :: FilePath
   , samplesCount   :: Int
   , binsCount      :: Double
-  , coarseGrained  :: Bool}
+  , coarseGrained  :: Bool
+  , fineGrained    :: Bool}
 
 options :: Parser Options
 options = Options
@@ -28,4 +29,8 @@ options = Options
       <*> switch
           ( long "coarse"
          <> help "Enable coarse grained lattice"
+         <> showDefault)
+      <*> switch
+          ( long "fine"
+         <> help "Enable fine grained lattice. It is not feasible for programs with many type annotations."
          <> showDefault)
