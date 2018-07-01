@@ -48,7 +48,7 @@ instance (Arbitrary a, BaseCase (Ann a Type)) => Arbitrary (Ann a Type) where
   arbitrary = genericArbitraryU
 
 instance (Arbitrary a, BaseCase (Type a)) => Arbitrary (Type a) where
-  arbitrary = genericArbitrary' (1 % 1 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % ())
+  arbitrary = genericArbitrary' (1 % 1 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % ())
 
 instance (Arbitrary a
          , BaseCase (Ann a Type)
