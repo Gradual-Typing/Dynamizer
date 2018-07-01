@@ -87,7 +87,7 @@ instance Gradual (e (Ann a e)) => Gradual (Ann a e) where
   static  (Ann _ e)    = static e
 
 instance (Gradual t, Gradual e, Dynamize t, Dynamize e) => Gradual (ExpF t e) where
-  lattice = bitraverse lattice pure
+  lattice = bitraverse lattice lattice
   count   = bifoldMap count count
   static  = bifoldMap static static
 
