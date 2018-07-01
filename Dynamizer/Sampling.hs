@@ -137,6 +137,8 @@ sampleLessPreciseType s = runMaybeT . f s
                                   | otherwise = mzero
     f (Ann (a, _) UnitTy)       n | n == 1    = return $ Ann a UnitTy
                                   | otherwise = mzero
+    f (Ann (a, _) (VarTy x))    n | n == 1    = return $ Ann a $ VarTy x
+                                  | otherwise = mzero
     f (Ann (a, _) (RefTy t))    n = (Ann a . RefTy) <$> f t (n-1)
     f (Ann (a, _) (GRefTy t))   n = (Ann a . GRefTy) <$> f t (n-1)
     f (Ann (a, _) (MRefTy t))   n = (Ann a . MRefTy) <$> f t (n-1)
@@ -150,6 +152,7 @@ sampleLessPreciseType s = runMaybeT . f s
       (rt':ts') <- sampleTypeList n c (t:ts)
       return $ Ann a $ ArrTy ts' rt'
     f (Ann (a, c) (TupleTy ts)) n = Ann a . TupleTy <$> sampleTypeList (n-1) (c-1) ts
+    f (Ann (a, _) (RecTy x t))  n = (Ann a . RecTy x) <$> f t (n-1)
 
     sampleTypeList :: Int -> Sum Int -> [Ann (a, Sum Int) Type] -> MaybeT RVar [Ann a Type]
     sampleTypeList n (Sum p) ts = do
