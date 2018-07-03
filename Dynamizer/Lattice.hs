@@ -105,13 +105,13 @@ instance Gradual t => Gradual (Type t) where
   lattice (FunTy t1 t2) = DL.cons Dyn (FunTy <$> mapM lattice t1 <*> lattice t2)
   lattice (ArrTy t1 t2) = ArrTy <$> mapM lattice t1 <*> lattice t2
   lattice (TupleTy ts)  = DL.cons Dyn (TupleTy <$> mapM lattice ts)
-  lattice CharTy        = DL.fromList [Dyn, CharTy]
-  lattice IntTy         = DL.fromList [Dyn, IntTy]
-  lattice FloatTy       = DL.fromList [Dyn, FloatTy]
-  lattice BoolTy        = DL.fromList [Dyn, BoolTy]
-  lattice UnitTy        = DL.fromList [Dyn, UnitTy]
-  lattice Dyn           = DL.singleton Dyn
-  lattice BlankTy       = DL.singleton BlankTy
+  lattice CharTy        = [Dyn, CharTy]
+  lattice IntTy         = [Dyn, IntTy]
+  lattice FloatTy       = [Dyn, FloatTy]
+  lattice BoolTy        = [Dyn, BoolTy]
+  lattice UnitTy        = [Dyn, UnitTy]
+  lattice Dyn           = [Dyn]
+  lattice BlankTy       = [BlankTy]
 
   funLattice _ = error "funLattice is undefined over arbitrary types"
 
@@ -166,7 +166,7 @@ genLatticeInfo = (DL.toList *** getSum) . localLattice
     localLattice (Ann _ e) = bifoldMap f localLattice e
 
     f :: Ann a Type -> (DL.DList (Ann (Int, a) Type), Sum Int)
-    f t = (DL.singleton ct, Sum n)
+    f t = ([ct], Sum n)
       where ct@(Ann (n, _) _) = addCount t
 
 getCount :: forall a. Ann (Int, a) Type -> Int
