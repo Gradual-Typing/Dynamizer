@@ -79,12 +79,15 @@ class Gradual p where
     else 0
   -- counts the number of static type nodes in a program
   static  :: p -> Sum Int
+  -- counts the number of functions in the top level
+  topLvlFunCount :: p -> Sum Int
 
 instance Gradual (e (Ann a e)) => Gradual (Ann a e) where
-  lattice (Ann i e)    = Ann i <$> lattice e
-  funLattice (Ann a e) = Ann a <$> funLattice e
-  count   (Ann _ e)    = count e
-  static  (Ann _ e)    = static e
+  lattice (Ann i e)        = Ann i <$> lattice e
+  funLattice (Ann a e)     = Ann a <$> funLattice e
+  count   (Ann _ e)        = count e
+  static  (Ann _ e)        = static e
+  topLvlFunCount (Ann _ e) = topLvlFunCount e
 
 instance (Gradual t, Gradual e, Dynamize t, Dynamize e) => Gradual (ExpF t e) where
   lattice = bitraverse lattice lattice
@@ -94,6 +97,10 @@ instance (Gradual t, Gradual e, Dynamize t, Dynamize e) => Gradual (ExpF t e) wh
   funLattice e@(DLam name args e' t) = [e, DLam name args (dynamize e') $ dynamize t]
   funLattice e@(Lam args body t) = [e, Lam args (dynamize body) $ dynamize t]
   funLattice e = bitraverse pure funLattice e
+
+  topLvlFunCount (DLam _ _ _ _) = 1
+  topLvlFunCount (Lam _ _ _)    = 1
+  topLvlFunCount e = bifoldMap (const mempty) topLvlFunCount e
 
 instance Gradual t => Gradual (Type t) where
   lattice (RefTy t)     = DL.cons Dyn (RefTy <$> lattice t)
@@ -156,6 +163,8 @@ instance Gradual t => Gradual (Type t) where
   static (FunTy t1 t2) = 1 + sum (map static (t2:t1))
   static (ArrTy t1 t2) = sum (map static (t2:t1))
   static (TupleTy ts)  = 1 + sum (map static ts)
+
+  topLvlFunCount = mempty
 
 genLatticeInfo :: forall e a. Bifoldable e
                => Ann a (e (Ann a Type))

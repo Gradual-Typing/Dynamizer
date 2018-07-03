@@ -27,7 +27,6 @@ import           Language.Grift.Source.Syntax
 import           Dynamizer.Lattice
 import           Dynamizer.Sampling
 
-import           Test.Lattice
 import           Test.Sampling
 
 
