@@ -91,6 +91,6 @@ prop_funLattice p =
 
 main :: IO ()
 main = do
-  quickCheck prop_funLattice
-  quickCheck prop_sampleLessPreciseType
+  quickCheckWith stdArgs{maxSize=18, maxSuccess=200} prop_funLattice
+  quickCheckWith stdArgs{maxSize=15, maxSuccess=200} prop_sampleLessPreciseType
   quickCheck prop_sampleOne
