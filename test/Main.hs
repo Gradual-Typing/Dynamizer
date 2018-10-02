@@ -23,6 +23,7 @@ import           Test.QuickCheck
 import           Test.QuickCheck.Monadic
 
 import           Language.Grift.Source.Syntax
+import           Language.Grift.Source.Utils
 
 import           Dynamizer.Lattice
 import           Dynamizer.Sampling
@@ -70,8 +71,8 @@ prop_sampleLessPreciseType t (NonNegative s) = monadicIO $ do
 
 test_sampleOne :: [Ann () Type] -> Int -> IO ([[Ann () Type]], [Interval Int])
 test_sampleOne ts  nb =
-  let ts' = map addCount ts
-      p = sum $ map getCount ts'
+  let ts' = map annotateTypeWithCount ts
+      p = getSum $ sum $ map getSnd ts'
       is = genIntervals (fromIntegral nb) $ fromIntegral p/fromIntegral nb
       seeds = map seedTFGen $ zipWith4 (,,,) [0..] [11..] [22..] [3..]
   in do z <- zipWithM (sampleOneIO (p, ts')) is seeds
@@ -87,7 +88,7 @@ prop_sampleOne ts =
 
 prop_funLattice :: Ann () (ExpF (Ann () Type)) -> Property
 prop_funLattice p =
-  monadicIO $ assert $ (length $ funLattice p) == 2 ^ (getSum (topLvlFunCount p))
+  monadicIO $ assert $ length (funLattice p) == 2 ^ getSum (funCount p)
 
 main :: IO ()
 main = do

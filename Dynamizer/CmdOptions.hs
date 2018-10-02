@@ -7,7 +7,7 @@ data Options = Options
   { sourceFilePath :: FilePath
   , samplesCount   :: Int
   , binsCount      :: Double
-  , coarseGrained  :: Bool
+  , coarseGrained  :: Int
   , fineGrained    :: Bool}
 
 options :: Parser Options
@@ -26,10 +26,12 @@ options = Options
          <> showDefault
          <> value 1
          <> metavar "BINS")
-      <*> switch
+      <*> option auto
           ( long "coarse"
-         <> help "Enable coarse grained lattice"
-         <> showDefault)
+         <> help "Enable coarse grained lattice over auto detected MODULES modules"
+         <> showDefault
+         <> value 0
+         <> metavar "MODULES")
       <*> switch
           ( long "fine"
          <> help "Enable fine grained lattice. It is not feasible for programs with many type annotations."

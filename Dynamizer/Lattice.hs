@@ -2,24 +2,29 @@
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedLists      #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE TypeApplications     #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TupleSections        #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE ViewPatterns         #-}
 
 module Dynamizer.Lattice where
 
-import           Control.Arrow         ((***))
-import           Control.Monad.CSP     (allCSPSolutions, constraint, mkDV)
+import           Control.Arrow         ((***), (&&&))
 import           Data.Bifoldable       (Bifoldable, bifoldMap)
 import           Data.Bifunctor        (bimap)
 import           Data.Bitraversable    (bitraverse)
 import qualified Data.DList            as DL
-import           Data.List             (transpose)
+import           Data.Foldable         (fold)
+import           Data.List             (replicate)
 import qualified Data.Map.Strict       as M
-import           Data.Maybe            (fromMaybe)
+import           Data.Maybe            (fromMaybe, fromJust)
 import           Data.Monoid           (Product (..), Sum (..))
 
 import           Language.Grift.Source.Syntax
+import           Language.Grift.Source.Utils
+
+import           Dynamizer.Module
 
 
 embedLocalLattice :: forall a t. Gradual (t (Ann a t))
@@ -42,27 +47,23 @@ replaceTypes :: forall a. Ord a
   -> Ann a (ExpF (Ann a Type))
 replaceTypes src2ty (Ann s e) = Ann s $ bimap replaceTypes' (replaceTypes src2ty) e
   where
-    dyn :: a -> Type (Ann a Type) -> Ann a Type
-    dyn s' (ArrTy l _) = Ann s' $ ArrTy (replicate (length l) (Ann s' Dyn)) (Ann s' Dyn)
-    dyn s' _           = Ann s' Dyn
-
     replaceTypes' :: Ann a Type -> Ann a Type
-    replaceTypes' (Ann s' t) = fromMaybe (dyn s' t) $ M.lookup s' src2ty
+    replaceTypes' t@(Ann s' _) = fromMaybe (dynamize t) $ M.lookup s' src2ty
 
-class Dynamize p where
+class Dynamizable p where
   dynamize :: p -> p
 
-instance Dynamize (e (Ann a e)) => Dynamize (Ann a e) where
+instance Dynamizable (e (Ann a e)) => Dynamizable (Ann a e) where
   dynamize (Ann a e) = Ann a $ dynamize e
 
-instance (Dynamize t, Dynamize e) => Dynamize (ExpF t e) where
+instance (Dynamizable t, Dynamizable e) => Dynamizable (ExpF t e) where
   dynamize = bimap dynamize dynamize
 
-instance Dynamize (Type (Ann a Type)) where
-  dynamize (ArrTy ts (Ann a _)) = ArrTy (map (\(Ann a' _) -> Ann a' Dyn) ts) $ Ann a Dyn
-  dynamize _ = Dyn
+instance Dynamizable t => Dynamizable (Type t) where
+  dynamize t@ArrTy{} = dynamize <$> t
+  dynamize _         = Dyn
 
-class Gradual p where
+class Dynamizable p => Gradual p where
   -- Generates the lattice of all possible gradually-typed versions.
   lattice :: p -> DL.DList p
   -- Generates the lattice of all coarce grained gradual typing on the function
@@ -79,182 +80,117 @@ class Gradual p where
     else 0
   -- counts the number of static type nodes in a program
   static  :: p -> Sum Int
-  -- counts the number of functions in the top level
-  topLvlFunCount :: p -> Sum Int
+  -- counts the number of functions.
+  funCount :: p -> Sum Int
 
+-- TODO: think about defining a generalized notion of Functor, Foldable, and
+-- Traversable for Ann and use it here
 instance Gradual (e (Ann a e)) => Gradual (Ann a e) where
-  lattice (Ann i e)        = Ann i <$> lattice e
-  funLattice (Ann a e)     = Ann a <$> funLattice e
-  count   (Ann _ e)        = count e
-  static  (Ann _ e)        = static e
-  topLvlFunCount (Ann _ e) = topLvlFunCount e
+  lattice    (Ann i e) = Ann i <$> lattice e
+  funLattice (Ann a e) = Ann a <$> funLattice e
+  count      (Ann _ e) = count e
+  static     (Ann _ e) = static e
+  funCount   (Ann _ e) = funCount e
 
-instance (Gradual t, Gradual e, Dynamize t, Dynamize e) => Gradual (ExpF t e) where
+instance (Gradual t, Gradual e) => Gradual (ExpF t e) where
   lattice = bitraverse lattice lattice
   count   = bifoldMap count count
   static  = bifoldMap static static
 
-  funLattice e@(DLam name args e' t) = [e, DLam name args (dynamize e') $ dynamize t]
-  funLattice e@(Lam args body t) = [e, Lam args (dynamize body) $ dynamize t]
-  funLattice e = bitraverse pure funLattice e
+  funLattice e@DLam{} = [e, bimap dynamize dynamize e]
+  funLattice e@Lam{}  = [e, bimap dynamize dynamize e]
+  funLattice e        = traverse funLattice e
 
-  topLvlFunCount (DLam _ _ _ _) = 1
-  topLvlFunCount (Lam _ _ _)    = 1
-  topLvlFunCount e = bifoldMap (const mempty) topLvlFunCount e
+  funCount DLam{}   = 1
+  funCount Lam{}    = 1
+  funCount e        = foldMap funCount e
 
 instance Gradual t => Gradual (Type t) where
-  lattice (RefTy t)     = DL.cons Dyn (RefTy <$> lattice t)
-  lattice (GRefTy t)    = DL.cons Dyn (GRefTy <$> lattice t)
-  lattice (MRefTy t)    = DL.cons Dyn (MRefTy <$> lattice t)
-  lattice (VectTy t)    = DL.cons Dyn (VectTy <$> lattice t)
-  lattice (GVectTy t)   = DL.cons Dyn (GVectTy <$> lattice t)
-  lattice (MVectTy t)   = DL.cons Dyn (MVectTy <$> lattice t)
-  lattice (FunTy t1 t2) = DL.cons Dyn (FunTy <$> mapM lattice t1 <*> lattice t2)
-  lattice (ArrTy t1 t2) = ArrTy <$> mapM lattice t1 <*> lattice t2
-  lattice (TupleTy ts)  = DL.cons Dyn (TupleTy <$> mapM lattice ts)
-  lattice CharTy        = [Dyn, CharTy]
-  lattice IntTy         = [Dyn, IntTy]
-  lattice FloatTy       = [Dyn, FloatTy]
-  lattice BoolTy        = [Dyn, BoolTy]
-  lattice UnitTy        = [Dyn, UnitTy]
-  lattice Dyn           = [Dyn]
-  lattice BlankTy       = [BlankTy]
+  lattice Dyn       = pure Dyn
+  lattice BlankTy   = pure BlankTy
+  lattice t@ArrTy{} = traverse lattice t
+  lattice t         = DL.cons Dyn $ traverse lattice t
 
-  funLattice _ = error "funLattice is undefined over arbitrary types"
+  count Dyn       = (1, 1)
+  count BlankTy   = (1, 1)
+  count t@ArrTy{} = foldMap count t
+  count t         = ((+1) *** (+1)) $ foldMap count t
 
-  count (RefTy t)     = ((+1) *** (+1)) $ count t
-  count (GRefTy t)    = ((+1) *** (+1)) $ count t
-  count (MRefTy t)    = ((+1) *** (+1)) $ count t
-  count (VectTy t)    = ((+1) *** (+1)) $ count t
-  count (GVectTy t)   = ((+1) *** (+1)) $ count t
-  count (MVectTy t)   = ((+1) *** (+1)) $ count t
-  count (FunTy t1 t2) = let c1 = map count t1
-                            c2 = count t2
-                        in (1 + fst c2 * product (map fst c1),
-                            1 + snd c2 + sum (map snd c1))
-  count (ArrTy t1 t2) = let c1 = map count t1
-                            c2 = count t2
-                        in (fst c2 * product (map fst c1),
-                            snd c2 + sum (map snd c1))
-  count (TupleTy ts)  = let c1 = map count ts
-                        in (1 + product (map fst c1),
-                            1 + sum (map snd c1))
-  count Dyn           = (1, 1)
-  count BlankTy       = (1, 1)
-  count CharTy        = (2, 1)
-  count IntTy         = (2, 1)
-  count FloatTy       = (2, 1)
-  count BoolTy        = (2, 1)
-  count UnitTy        = (2, 1)
+  static Dyn       = 0
+  static BlankTy   = 0
+  static t@ArrTy{} = foldMap static t
+  static t         = 1 + foldMap static t
 
-  static Dyn           = 0
-  static BlankTy       = 0
-  static CharTy        = 1
-  static IntTy         = 1
-  static FloatTy       = 1
-  static BoolTy        = 1
-  static UnitTy        = 1
-  static (RefTy t)     = 1 + static t
-  static (GRefTy t)    = 1 + static t
-  static (MRefTy t)    = 1 + static t
-  static (VectTy t)    = 1 + static t
-  static (GVectTy t)   = 1 + static t
-  static (MVectTy t)   = 1 + static t
-  static (FunTy t1 t2) = 1 + sum (map static (t2:t1))
-  static (ArrTy t1 t2) = sum (map static (t2:t1))
-  static (TupleTy ts)  = 1 + sum (map static ts)
+  funLattice = pure
 
-  topLvlFunCount = mempty
+  funCount = mempty
+
+annotateTypeWithCount :: forall a. Ann a Type -> Ann (a, Sum Int) Type
+annotateTypeWithCount = bottomUp (\a e -> (a, f e))
+  where
+    f :: Type (Ann (a, Sum Int) Type) -> Sum Int
+    f BlankTy   = 0
+    f Dyn       = 0
+    f e@ArrTy{} = foldMap getSnd e
+    f e         = 1 + foldMap getSnd e
 
 genLatticeInfo :: forall e a. Bifoldable e
                => Ann a (e (Ann a Type))
-               -> ([Ann (Int, a) Type], Int)
+               -> ([Ann (a, Sum Int) Type], Int)
 genLatticeInfo = (DL.toList *** getSum) . localLattice
   where
-    localLattice :: Ann a (e (Ann a Type)) -> (DL.DList (Ann (Int, a) Type), Sum Int)
-    localLattice (Ann _ e) = bifoldMap f localLattice e
+    localLattice :: Ann a (e (Ann a Type)) -> (DL.DList (Ann (a, Sum Int) Type), Sum Int)
+    localLattice (Ann _ e) = bifoldMap ((pure &&& getSnd) . annotateTypeWithCount) localLattice e
 
-    f :: Ann a Type -> (DL.DList (Ann (Int, a) Type), Sum Int)
-    f t = ([ct], Sum n)
-      where ct@(Ann (n, _) _) = addCount t
-
-getCount :: forall a. Ann (Int, a) Type -> Int
-getCount (Ann (x,_) _) = x
-
-getAnn :: forall a b. Ann (b, a) Type -> a
-getAnn (Ann (_,a) _) = a
-
-addCount :: forall a. Ann a Type -> Ann (Int, a) Type
-addCount = bottomUp f
+coarseLattice :: forall a t. Gradual t => Int -- number of units to gradualize over
+              -> Ann a (ExpF t)               -- the input program
+              -> [Ann a (ExpF t)]             -- the list of partially typed programs
+coarseLattice unitCount p = f $ funCount p
   where
-    bottomUp :: (a -> Type (Ann (Int, a) Type) -> Ann (Int, a) Type)
-             -> Ann a Type
-             -> Ann (Int, a) Type
-    bottomUp fn (Ann a t) = fn a $ bottomUp fn <$> t
+    f n | n < 10    = DL.toList $ funLattice p
+        | otherwise = bigCoarseLattice unitCount p
 
-    f :: a -> Type (Ann (Int, a) Type) -> Ann (Int, a) Type
-    f a BlankTy = Ann (0, a) BlankTy
-    f a Dyn     = Ann (0, a) Dyn
-    f a CharTy  = Ann (1, a) CharTy
-    f a IntTy   = Ann (1, a) IntTy
-    f a FloatTy = Ann (1, a) FloatTy
-    f a BoolTy  = Ann (1, a) BoolTy
-    f a UnitTy  = Ann (1, a) UnitTy
-    f a t@(RefTy (Ann (n, _) _))   = Ann (n+1, a) t
-    f a t@(GRefTy (Ann (n, _) _))  = Ann (n+1, a) t
-    f a t@(MRefTy (Ann (n, _) _))  = Ann (n+1, a) t
-    f a t@(VectTy (Ann (n, _) _))  = Ann (n+1, a) t
-    f a t@(GVectTy (Ann (n, _) _)) = Ann (n+1, a) t
-    f a t@(MVectTy (Ann (n, _) _)) = Ann (n+1, a) t
-    f a t@(FunTy ts rt) = Ann ((+) 1 $ sum $ map getCount (rt:ts), a) t
-    f a t@(ArrTy ts rt) = Ann (sum $ map getCount (rt:ts), a) t
-    f a t@(TupleTy ts)  = Ann ((+) 1 $ sum $ map getCount ts, a) t
-
-stripCount :: Ann (Int, a) Type -> Ann a Type
-stripCount (Ann (_, a) t) = Ann a $ stripCount <$> t
-
-genLessPreciseType :: forall a. Int -> Ann (Int, a) Type -> [Ann a Type]
-genLessPreciseType nodes ty'@(Ann (n'', _) _) | nodes < 0 || nodes > n'' = []
-                                              | otherwise = f ty' nodes
+bigCoarseLattice :: forall a t. Gradual t 
+                 => Int              -- the desired number of modules to
+                                     -- gradualize over. The actual number of
+                                     -- modules will be less than or equal to
+                                     -- that number.
+                 -> Ann a (ExpF t)   -- the input program
+                 -> [Ann a (ExpF t)]
+bigCoarseLattice unitCount p = map (\(bit, m) -> mapAnn m bit Nothing p) maps
   where
-    -- generate $ns' such that (sum ns') = $n-1, each number in ns' <= the
-    -- corresponding number in $ns, and there is y, y' \in $ns' that are
-    -- different in each combination.
-    gen :: Int -> [Int] -> [[Int]]
-    gen n ns = allCSPSolutions $ do
-      dvs <- mapM (\a -> mkDV [0 .. a]) ns
-      constraint ((== n) . sum) dvs
-      return dvs
+    modules = computeModules (unitCount - 1) p
 
-    f :: Ann (Int, a) Type -> Int -> [Ann a Type]
-    f (Ann _ Dyn)               _ = error "genLessPreciseType: unexpected Dyn"
-    f (Ann _ (ArrTy _ _))       0 = []
-    f t@(Ann (n', a) _)         n | n == n' = [stripCount t] -- otherwise n < n'
-                                  | n == 0  = [Ann a Dyn]
-    f (Ann (_, a) BlankTy)      _ = [Ann a BlankTy]
-    f (Ann (_, a) CharTy)       _ = [Ann a CharTy]
-    f (Ann (_, a) IntTy)        _ = [Ann a IntTy]
-    f (Ann (_, a) FloatTy)      _ = [Ann a FloatTy]
-    f (Ann (_, a) BoolTy)       _ = [Ann a BoolTy]
-    f (Ann (_, a) UnitTy)       _ = [Ann a UnitTy]
-    f (Ann (_, a) (RefTy t))    n = (Ann a . RefTy) <$> f t (n-1)
-    f (Ann (_, a) (GRefTy t))   n = (Ann a . GRefTy) <$> f t (n-1)
-    f (Ann (_, a) (MRefTy t))   n = (Ann a . MRefTy) <$> f t (n-1)
-    f (Ann (_, a) (VectTy t))   n = (Ann a . VectTy) <$> f t (n-1)
-    f (Ann (_, a) (GVectTy t))  n = (Ann a . GVectTy) <$> f t (n-1)
-    f (Ann (_, a) (MVectTy t))  n = (Ann a . MVectTy) <$> f t (n-1)
-    f (Ann (_, a) (FunTy ts t)) n = g a (n-1) FunTy (t:ts)
-    f (Ann (_, a) (ArrTy ts t)) n = g a n ArrTy (t:ts)
-    f (Ann (_, a) (TupleTy ts)) n =
-      map (Ann a) $ concatMap (map TupleTy . transpose . zipWith f ts) $ gen (n-1) $ map getCount ts
+    mapAnn :: M.Map FunName Bool -- maps function names to boolean that indicate
+                                 -- whether to dynamize that function as part of
+                                 -- the current module.
+           -> Bool               -- determines if the region that does not
+                                 -- belong to any function should be dynamized.
+           -> Maybe FunName      -- the name of the current bound function.
+           -> Ann a (ExpF t)     -- the input program
+           -> Ann a (ExpF t)
+    mapAnn info bit name (Ann a e) = f info bit name a e
 
-    g :: a
-      -> Int
-      -> ([Ann a Type] -> Ann a Type -> Type (Ann a Type))
-      -> [Ann (Int, a) Type]
-      -> [Ann a Type]
-    g a n c ts =
-      let temp :: [[[Ann a Type]]] = map (zipWith f ts) $ gen n $ map getCount ts
-          rts  :: [[Ann a Type]]   = map head temp
-          args :: [[[Ann a Type]]] = map tail temp
-      in map (Ann a) $ concat $ zipWith (zipWith c) (map transpose args) rts
+    f :: M.Map FunName Bool
+      -> Bool
+      -> Maybe FunName
+      -> a
+      -> ExpF t (Ann a (ExpF t))
+      -> Ann a (ExpF t)
+    f info bit _ a e@(DLam name _ _ _) =
+      Ann a $ case M.lookup name info of
+                Just True -> dynamize e
+                _         -> mapAnn info bit (Just name) <$> e
+    f info bit name a e@Lam{} =
+      Ann a $ case M.lookup (fromJust name) info of
+                Just True -> dynamize e
+                _         -> mapAnn info bit name <$> e
+    f info bit _ a (Bind name t b) =
+      Ann a $ Bind name (if bit then dynamize t else t) $ mapAnn info bit (Just name) b
+    f info bit name a e@DConst{} =
+      Ann a $ bimap (\t -> if bit then dynamize t else t) (mapAnn info bit name) e
+    f info bit name a e = Ann a $ mapAnn info bit name <$> e
+
+    configs = sequence @[] @[] @Bool $ replicate unitCount [True, False]
+
+    maps = map (head &&& (M.fromList . fold . zipWith (\ m b -> map (, b) m) modules . tail)) configs

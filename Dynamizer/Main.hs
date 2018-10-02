@@ -33,7 +33,7 @@ writeLattice b dname dps =
             return (n+1)) (0 :: Int) dps
 
 greet :: Options -> IO ()
-greet (Options srcFilePath ns nb coarse fine) = do
+greet (Options srcFilePath ns nb modules fine) = do
   p <- readFile srcFilePath
   case parser p of
     Left err -> print err
@@ -45,12 +45,12 @@ greet (Options srcFilePath ns nb coarse fine) = do
       l <- executionMode a e
       writeLattice w dirPath l
   where executionMode a e
-          | coarse  = return $ DL.toList $ funLattice e
-          | fine    = return $ DL.toList $ lattice e
-          | nb == 1 = if a > 10000
-            then return $ sampleUniformally e ns
-            else return $ sampleUniformally' e ns
-          | otherwise = concat <$> sampleFromBins e ns nb
+          | modules > 0  = return $ coarseLattice modules e
+          | fine         = return $ DL.toList $ lattice e
+          | nb == 1      = if a > 10000
+                           then return $ sampleUniformally e ns
+                           else return $ sampleUniformally' e ns
+          | otherwise    = concat <$> sampleFromBins e ns nb
 
 main :: IO ()
 main = greet =<< execParser opts

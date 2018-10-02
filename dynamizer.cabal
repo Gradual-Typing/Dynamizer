@@ -21,6 +21,7 @@ Source-repository head
 
 library
   exposed-modules:     Dynamizer.Lattice
+                     , Dynamizer.Module
                      , Dynamizer.Sampling
   build-depends:       base
                      , bifunctors
@@ -30,6 +31,7 @@ library
                      , intervals
                      , language-grift
                      , lattices
+                     , mtl
                      , mwc-random
                      , parsec
                      , pretty
