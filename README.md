@@ -21,7 +21,7 @@ The dynamizer has several modes of execution, and will be described by example. 
 
 Let's grab a Grift program for demo:
 ```bash
-wget https://github.com/Gradual-Typing/Grift/blob/master/benchmark/suite/macro/src/static/matmult.grift
+wget https://raw.githubusercontent.com/Gradual-Typing/benchmarks/master/src/static/matmult.grift
 ```
 
 All configurations will be written to disk, 859963392 in this case, if no optional parameter is specified
