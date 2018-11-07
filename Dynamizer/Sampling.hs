@@ -26,6 +26,7 @@ import           System.Random.MWC            (withSystemRandom)
 import           System.Random.Shuffle        (shuffle')
 import           System.Random.TF             (seedTFGen)
 
+import           Language.Grift.Common.Syntax
 import           Language.Grift.Source.Syntax
 import           Language.Grift.Source.Utils
 
@@ -37,11 +38,12 @@ randomList bnds n = take n . randomRs bnds
 
 -- | Sample partially-typed versions uniformally.
 sampleUniformally :: forall a. Ord a
-                  => Ann a (ExpF (Ann a Type))   -- ^ The fully-statically typed AST to sample from
-                  -> Int                         -- ^ The number of samples
-                  -> [Ann a (ExpF (Ann a Type))] -- ^ The list of samples
-sampleUniformally e ns = map (pick (embedLocalLattice e) . M.fromList . zip tps) $ nub rns
+                  => ProgramF (Ann a (ExpF (Ann a Type)))   -- ^ The fully-statically typed AST to sample from
+                  -> Int                                    -- ^ The number of samples
+                  -> [ProgramF (Ann a (ExpF (Ann a Type)))] -- ^ The list of samples
+sampleUniformally e ns = map (pick' e . M.fromList . zip tps) $ nub rns
   where
+    pick' e' x = fmap ((`pick` x) . embedLocalLattice) e'
     typeinfo = fst $ genLatticeInfo e
     tns = map (getSum . getSnd) typeinfo
     tps = map getFst typeinfo
@@ -50,9 +52,9 @@ sampleUniformally e ns = map (pick (embedLocalLattice e) . M.fromList . zip tps)
 
 -- | Sample partially-typed versions uniformally. It generates the full lattice before sampling.
 sampleUniformally' :: forall a t. Gradual (t (Ann a t))
-                   => Ann a (ExpF (Ann a t))   -- ^ The fully-statically typed AST to sample from
+                   => ProgramF (Ann a (ExpF (Ann a t)))   -- ^ The fully-statically typed AST to sample from
                    -> Int                      -- ^ The number of samples
-                   -> [Ann a (ExpF (Ann a t))] -- ^ The list of samples
+                   -> [ProgramF (Ann a (ExpF (Ann a t)))] -- ^ The list of samples
 sampleUniformally' e ns =
   let l = DL.toList $ lattice e
   in map (l !!) $ take ns $ nub $ randomRs (0,length l - 1) $ seedTFGen (0, 11, 22, 33)
@@ -74,27 +76,27 @@ genIntervals intervalsCount intervalWidth =
 
 -- | Sample partially-typed versions from equally-sized bins of type preciseness
 sampleFromBins :: forall a. Ord a
-               => Ann a (ExpF (Ann a Type))        -- ^ The fully-statically typed AST to sample from
-               -> Int                              -- ^ The number of samples in each bin
-               -> Double                           -- ^ The number of bins
-               -> IO [[Ann a (ExpF (Ann a Type))]] -- ^ The list of bins, where each is a list of samples
+               => ProgramF (Ann a (ExpF (Ann a Type))) -- ^ The fully-statically typed AST to sample from
+               -> Int                                  -- ^ The number of samples in each bin
+               -> Double                               -- ^ The number of bins
+               -> IO [[ProgramF (Ann a (ExpF (Ann a Type)))]]     -- ^ The list of bins, where each is a list of samples
 sampleFromBins ast ns nb = do
   let (typeInfo, typesNodesCount) = genLatticeInfo ast
   withSystemRandom @IO $ runRVar $ mapM (sampleMany ns ast typeInfo typesNodesCount) $ genIntervals nb $ fromIntegral typesNodesCount/nb
 
 sampleMany :: forall a. Ord a
            => Int
-           -> Ann a (ExpF (Ann a Type))
+           -> ProgramF (Ann a (ExpF (Ann a Type)))
            -> [Ann (a, Sum Int) Type]
            -> Int -- ^ total number of nodes
            -> Interval Int
-           -> RVar [Ann a (ExpF (Ann a Type))]
+           -> RVar [ProgramF (Ann a (ExpF (Ann a Type)))]
 sampleMany n p l m i =
   mapM (f . seedTFGen) $ take n $ zipWith4 (,,,) [0..] [11..] [22..] [33..]
   where
     f (split -> (g1, g2)) = do
       sl <- sampleOne (m, shuffle' l (length l) g1) i g2
-      return $ replaceTypes (M.fromList sl) p
+      return $ fmap (replaceTypes (M.fromList sl)) p
 
 sampleOne :: forall a g. RandomGen g
           => (Int, [Ann (a, Sum Int) Type])

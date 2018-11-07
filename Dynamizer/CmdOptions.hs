@@ -4,17 +4,22 @@ import           Data.Semigroup      ((<>))
 import           Options.Applicative
 
 data Options = Options
-  { sourceFilePath :: FilePath
-  , samplesCount   :: Int
-  , binsCount      :: Double
-  , coarseGrained  :: Int
-  , fineGrained    :: Bool}
+  { sourceFilePath          :: FilePath
+  , fineGrained             :: Bool
+  , samplesCount            :: Int
+  , binsCount               :: Double
+  , coarseGrained           :: Bool
+  , modulesCount            :: Int }
 
 options :: Parser Options
 options = Options
       <$> argument str
           ( metavar "FILE"
          <> help "File path of a grift program" )
+      <*> switch
+          ( long "fine"
+         <> help "Enable fine grained lattice. It is not feasible for programs with many type annotations."
+         <> showDefault)
       <*> option auto
           ( long "samples"
          <> metavar "SAMPLES"
@@ -26,13 +31,13 @@ options = Options
          <> showDefault
          <> value 1
          <> metavar "BINS")
-      <*> option auto
-          ( long "coarse"
-         <> help "Enable coarse grained lattice over auto detected MODULES modules"
-         <> showDefault
-         <> value 0
-         <> metavar "MODULES")
       <*> switch
-          ( long "fine"
-         <> help "Enable fine grained lattice. It is not feasible for programs with many type annotations."
+          ( long "coarse"
+         <> help "Enable coarse grained lattice over modules"
          <> showDefault)
+      <*> option auto
+          ( long "modules-count"
+         <> help "Number of modules to be auto detected in case no syntactic module appear in input source"
+         <> showDefault
+         <> value (-1)
+         <> metavar "MODULES")

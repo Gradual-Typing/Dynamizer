@@ -20,7 +20,8 @@ Source-repository head
    location: git://github.com/Gradual-Typing/Dynamizer.git
 
 library
-  exposed-modules:     Dynamizer.Lattice
+  exposed-modules:     Dynamizer.Dynamizable
+                     , Dynamizer.Lattice
                      , Dynamizer.Module
                      , Dynamizer.Sampling
   build-depends:       base

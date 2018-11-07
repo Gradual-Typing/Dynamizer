@@ -1,9 +1,11 @@
 {-# LANGUAGE ExplicitForAll       #-}
+{-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE OverloadedLists      #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Dynamizer.Module
   ( computeModules
+  , Modulable (..)
   , FunName
   ) where
 
@@ -18,8 +20,11 @@ import qualified Data.Map.Strict       as M
 import           Data.Maybe            (fromMaybe, fromJust)
 import           Data.Monoid           (Sum (..), (<>))
 
+import           Language.Grift.Common.Syntax
 import           Language.Grift.Source.Syntax
 import           Language.Grift.Source.Utils
+
+import           Dynamizer.Dynamizable
 
 
 type Key        = Int
@@ -29,7 +34,42 @@ type FunInfo    = (FunName, (Key, Size))
 type CallGraph  = [(FunName, Key, [Key])]
 type FunInfoMap = M.Map FunName (Key, Size)
 
-computeModules :: forall a t. Int -> Ann a (ExpF t) -> [[FunName]]
+class Dynamizable t => Modulable t where
+  pickModuleConfiguration :: M.Map FunName Bool -> t -> t
+
+instance Modulable e => Modulable (ProgramF e) where
+  pickModuleConfiguration configuration = fmap (pickModuleConfiguration configuration)
+
+instance Modulable e => Modulable (ScopeF e) where
+  pickModuleConfiguration configuration = fmap (pickModuleConfiguration configuration)
+
+instance Modulable e => Modulable (ModuleF e) where
+  pickModuleConfiguration _ = id
+
+instance Modulable (e (Ann a e)) => Modulable (Ann a e) where
+  pickModuleConfiguration configuration (Ann a e) = Ann a $ pickModuleConfiguration configuration e
+
+instance {-# OVERLAPPING #-} Modulable t => Modulable (BindF t (Ann a (ExpF t))) where
+  pickModuleConfiguration configuration e@(Bind name _ (Ann _ Lam{})) =
+    case M.lookup name configuration of
+      Just True -> dynamize e
+      _         -> fmap (pickModuleConfiguration configuration) e
+  pickModuleConfiguration configuration e = fmap (pickModuleConfiguration configuration) e
+
+instance (Modulable t, Modulable e) => Modulable (BindF t e) where
+  pickModuleConfiguration configuration = fmap (pickModuleConfiguration configuration)
+
+instance (Modulable t, Modulable e) => Modulable (ExpF t e) where
+  pickModuleConfiguration configuration e@(DLam name _ _ _) =
+    case M.lookup name configuration of
+      Just True -> dynamize e
+      _         -> fmap (pickModuleConfiguration configuration) e
+  pickModuleConfiguration configuration e = fmap (pickModuleConfiguration configuration) e
+
+instance Modulable t => Modulable (Type t) where
+  pickModuleConfiguration _ = id
+
+computeModules :: forall a t. Int -> ScopeF (Ann a (ExpF t)) -> [[FunName]]
 computeModules desiredCount p =
   if modulesCount <= desiredCount
   then modules
@@ -52,9 +92,9 @@ computeModules desiredCount p =
 
     modulesCount = length modules
 
-buildCallGraph :: forall a t. (Ann (a, Maybe Key) (ExpF t), [FunInfo])
+buildCallGraph :: forall a t. (ScopeF (Ann (a, Maybe Key) (ExpF t)), [FunInfo])
                -> (CallGraph, FunInfoMap)
-buildCallGraph (p, l) = (DL.toList $ mapAnn Nothing Nothing p, info)
+buildCallGraph (p, l) = (DL.toList $ foldMap (mapAnn Nothing Nothing) p, info)
   where
     info = M.fromList l
 
@@ -78,11 +118,10 @@ buildCallGraph (p, l) = (DL.toList $ mapAnn Nothing Nothing p, info)
     f name k (Lam _ e _)    = [(fromJust name, fromJust k, DL.toList $ cata (const findApps) e)]
     f name k e              = foldMap (mapAnn name k) e
 
-annotateFunsWithKeys :: forall a t. Ann a (ExpF t)
-                     -> (Ann (a, Maybe Key) (ExpF t), [FunInfo])
+annotateFunsWithKeys :: forall a t. ScopeF (Ann a (ExpF t)) -> (ScopeF (Ann (a, Maybe Key) (ExpF t)), [FunInfo])
 annotateFunsWithKeys p = (p', l)
   where
-    (p', (_, l)) = runState (mapAnn Nothing p) (0, [])
+    (p', (_, l)) = runState (mapM (mapAnn Nothing) p) (0, [])
 
     mapAnn :: Maybe FunName
            -> Ann a (ExpF t)
