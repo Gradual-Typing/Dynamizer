@@ -22,6 +22,7 @@ import           System.Random.TF          (seedTFGen)
 import           Test.QuickCheck
 import           Test.QuickCheck.Monadic
 
+import           Language.Grift.Common.Syntax
 import           Language.Grift.Source.Syntax
 import           Language.Grift.Source.Utils
 
@@ -34,6 +35,7 @@ import           Test.Sampling
 deriving instance Generic (Ann a Type)
 deriving instance Generic (Type a)
 deriving instance Generic (Ann a (ExpF (Ann a Type)))
+deriving instance Generic (BindF (Ann a Type) (Ann a (ExpF (Ann a Type))))
 deriving instance Generic (ExpF (Ann a Type) (Ann a (ExpF (Ann a Type))))
 deriving instance Generic Prim
 deriving instance Generic Operator
@@ -48,19 +50,32 @@ instance (Arbitrary a, BaseCase (Ann a Type)) => Arbitrary (Ann a Type) where
   arbitrary = genericArbitraryU
 
 instance (Arbitrary a, BaseCase (Type a)) => Arbitrary (Type a) where
-  arbitrary = genericArbitrary' (1 % 1 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % ())
+  arbitrary = genericArbitrary' (1 % 1 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 %
+                                 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % ())
 
 instance (Arbitrary a
          , BaseCase (Ann a Type)
          , BaseCase (ExpF (Ann a Type) (Ann a (ExpF (Ann a Type))))
+         , BaseCase (BindF (Ann a Type) (Ann a (ExpF (Ann a Type))))
          , BaseCase (Ann a (ExpF (Ann a Type)))) => Arbitrary (Ann a (ExpF (Ann a Type))) where
+  arbitrary = genericArbitraryU
+
+instance (Arbitrary a
+         , BaseCase (Ann a Type)
+         , BaseCase (ExpF (Ann a Type) (Ann a (ExpF (Ann a Type))))
+         , BaseCase (Ann a (ExpF (Ann a Type)))
+         , BaseCase (BindF (Ann a Type) (Ann a (ExpF (Ann a Type))))) => Arbitrary (BindF (Ann a Type) (Ann a (ExpF (Ann a Type)))) where
   arbitrary = genericArbitraryU
 
 instance (Arbitrary a
          , BaseCase (Ann a (ExpF (Ann a Type)))
          , BaseCase (Ann a Type)
+         , BaseCase (BindF (Ann a Type) (Ann a (ExpF (Ann a Type))))
          , BaseCase (ExpF (Ann a Type) (Ann a (ExpF (Ann a Type))))) => Arbitrary (ExpF (Ann a Type) (Ann a (ExpF (Ann a Type)))) where
-  arbitrary = genericArbitrary' (10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % ())
+  arbitrary = genericArbitrary' (10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 
+                                 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 
+                                 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 10 % 
+                                 10 % 10 % 10 % 10 % 10 % 10 % 10 % ())
 
 prop_sampleLessPreciseType :: Ann () Type -> NonNegative Int -> Property
 prop_sampleLessPreciseType t (NonNegative s) = monadicIO $ do
