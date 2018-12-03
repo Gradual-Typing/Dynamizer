@@ -143,7 +143,6 @@ instance Gradual t => Gradual (Type t) where
 
   static Dyn       = 0
   static BlankTy   = 0
-  static t@ArrTy{} = foldMap static t
   static t         = 1 + foldMap static t
 
   funLattice = pure
@@ -153,13 +152,12 @@ instance Gradual t => Gradual (Type t) where
   funCount = mempty
 
 annotateTypeWithCount :: forall a. Ann a Type -> Ann (a, Sum Int) Type
-annotateTypeWithCount = bottomUp (\a e -> (a, f e))
+annotateTypeWithCount = bottomUp $ \a t -> (a, f t)
   where
     f :: Type (Ann (a, Sum Int) Type) -> Sum Int
     f BlankTy   = 0
     f Dyn       = 0
-    f e@ArrTy{} = foldMap getSnd e
-    f e         = 1 + foldMap getSnd e
+    f t         = 1 + foldMap getSnd t
 
 genLatticeInfo :: forall f a. Bifoldable f
                => ProgramF (Ann a (f (Ann a Type)))

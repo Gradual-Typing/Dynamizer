@@ -4,12 +4,13 @@ import           Data.Semigroup      ((<>))
 import           Options.Applicative
 
 data Options = Options
-  { sourceFilePath          :: FilePath
-  , fineGrained             :: Bool
-  , samplesCount            :: Int
-  , binsCount               :: Double
-  , coarseGrained           :: Bool
-  , modulesCount            :: Int }
+  { sourceFilePath :: FilePath
+  , fineGrained    :: Bool
+  , samplesCount   :: Int
+  , binsCount      :: Double
+  , coarseGrained  :: Bool
+  , modulesCount   :: Int
+  , logging        :: Bool }
 
 options :: Parser Options
 options = Options
@@ -41,3 +42,7 @@ options = Options
          <> showDefault
          <> value (-1)
          <> metavar "MODULES")
+      <*> switch
+          ( long "log"
+         <> help "Enable logging"
+         <> showDefault)

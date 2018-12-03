@@ -35,7 +35,7 @@ writeLattice b dname dps =
             return (n+1)) (0 :: Int) dps
 
 greet :: Options -> IO ()
-greet (Options srcFilePath fine ns nb coarse modules) = do
+greet (Options srcFilePath fine ns nb coarse modules logEnabled) = do
   ast <- parseGriftProgram srcFilePath
   let (annotationLatticeSize,typeConstCount)  = (getProduct *** getSum) $ count ast
       dirPath = dropExtension srcFilePath ++ "/"
@@ -59,7 +59,8 @@ greet (Options srcFilePath fine ns nb coarse modules) = do
     fineMode annotationLatticeSize ast | ns == -1 && nb == 1 = return $ DL.toList $ lattice ast
                                        | nb == 1 && annotationLatticeSize > 10000 = return $ sampleUniformally ast ns
                                        | nb == 1 = return $ sampleUniformally' ast ns
-                                       | otherwise = concat <$> sampleFromBins ast ns nb
+                                       | logEnabled = concat <$> runSampleFromBinsWithLogging ast ns nb
+                                       | otherwise = concat <$> runSampleFromBinsWithoutLogging ast ns nb
 main :: IO ()
 main = greet =<< execParser opts
   where

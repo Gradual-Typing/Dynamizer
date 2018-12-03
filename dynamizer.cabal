@@ -19,28 +19,28 @@ Source-repository head
    type: git
    location: git://github.com/Gradual-Typing/Dynamizer.git
 
-library
+library dynamizer-lib
   exposed-modules:     Dynamizer.Dynamizable
                      , Dynamizer.Lattice
+                     , Dynamizer.Logging
                      , Dynamizer.Module
                      , Dynamizer.Sampling
   build-depends:       base
-                     , bifunctors
                      , containers
-                     , csp
                      , dlist
                      , intervals
                      , language-grift
-                     , lattices
+                     , mmorph
+                     , monad-logger
+                     , MonadPrompt
                      , mtl
                      , mwc-random
-                     , parsec
-                     , pretty
                      , random
                      , random-extras
                      , random-fu
                      , random-shuffle
                      , rvar
+                     , text
                      , tf-random
                      , transformers
   default-language:    Haskell2010
@@ -51,10 +51,9 @@ executable dynamizer
   main-is:             Main.hs
   other-modules:       CmdOptions
   build-depends:       base
-                     , containers
                      , directory
                      , dlist
-                     , dynamizer
+                     , dynamizer-lib
                      , filepath
                      , language-grift
                      , optparse-applicative
@@ -69,14 +68,12 @@ test-suite test
   hs-source-dirs:      test
   other-modules:       Test.Sampling
   build-depends:       base
-                     , dynamizer
+                     , dynamizer-lib
                      , generic-random
                      , intervals
                      , language-grift
-                     , mwc-random
                      , QuickCheck
                      , random
-                     , random-fu
                      , tf-random
                      , transformers
   default-language:    Haskell2010

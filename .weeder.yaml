@@ -3,18 +3,12 @@
   - section:
     - name: exe:dynamizer
     - message:
-      - name: Module not compiled
-      - module:
-        - CmdOptions
-        - Main.hs
-    - message:
       - name: Redundant build-depends entry
       - depends:
-        - base
-        - containers
-        - directory
-        - dlist
-        - dynamizer
-        - filepath
-        - optparse-applicative
+        - dynamizer-lib
+  - section:
+    - name: test:test
+    - message:
+      - name: Redundant build-depends entry
+      - depends: dynamizer-lib
 
