@@ -1,4 +1,3 @@
-{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE Rank2Types          #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -80,14 +79,14 @@ genIntervals intervalsCount intervalWidth =
 runSampleFromBinsWithLogging :: forall a. (Ord a, Show a)
                              => ProgramF (Ann a (ExpF (Ann a Type)))        -- ^ The fully-statically typed AST to sample from
                              -> Int                                         -- ^ The number of samples in each bin
-                             -> Double                                      -- ^ The number of bins
+                             -> Int                                         -- ^ The number of bins
                              -> IO [[ProgramF (Ann a (ExpF (Ann a Type)))]] -- ^ The list of bins, where each is a list of samples
 runSampleFromBinsWithLogging ast ns nb = runSamplingWithLogging $ sampleFromBins ast ns nb
 
 runSampleFromBinsWithoutLogging :: forall a. (Ord a, Show a)
                                 => ProgramF (Ann a (ExpF (Ann a Type)))        -- ^ The fully-statically typed AST to sample from
                                 -> Int                                         -- ^ The number of samples in each bin
-                                -> Double                                      -- ^ The number of bins
+                                -> Int                                         -- ^ The number of bins
                                 -> IO [[ProgramF (Ann a (ExpF (Ann a Type)))]] -- ^ The list of bins, where each is a list of samples
 runSampleFromBinsWithoutLogging ast ns nb = runSamplingWithoutLogging $ sampleFromBins ast ns nb
 
@@ -95,11 +94,11 @@ runSampleFromBinsWithoutLogging ast ns nb = runSamplingWithoutLogging $ sampleFr
 sampleFromBins :: forall a m n. (MonadTrans m, MonadLogger (m (RVarT n)), MonadIO n, Ord a, Show a)
                => ProgramF (Ann a (ExpF (Ann a Type)))                 -- ^ The fully-statically typed AST to sample from
                -> Int                                                  -- ^ The number of samples in each bin
-               -> Double                                               -- ^ The number of bins
+               -> Int                                                  -- ^ The number of bins
                -> m (RVarT n) [[ProgramF (Ann a (ExpF (Ann a Type)))]] -- ^ The list of bins, where each is a list of samples
 sampleFromBins ast ns nb = do
   let (typeInfo, typesNodesCount) = genLatticeInfo ast
-  let intervals = genIntervals nb $ fromIntegral typesNodesCount/nb
+  let intervals = genIntervals (fromIntegral nb) $ fromIntegral $ quot typesNodesCount nb
   let msg = "sampleFrombins: proceeding to sample " ++ show ns ++ " samples from each of the following intervals: " ++ show intervals
   logDebugNS (Text.pack "sampleFrombins") $ Text.pack msg
   mapM (sampleMany ns ast typeInfo typesNodesCount) intervals

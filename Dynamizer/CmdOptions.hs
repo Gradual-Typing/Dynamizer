@@ -4,13 +4,13 @@ import           Data.Semigroup      ((<>))
 import           Options.Applicative
 
 data Options = Options
-  { sourceFilePath :: FilePath
-  , fineGrained    :: Bool
-  , samplesCount   :: Int
-  , binsCount      :: Double
-  , coarseGrained  :: Bool
-  , modulesCount   :: Int
-  , logging        :: Bool }
+  { sourceFilePath     :: FilePath
+  , fineGrained        :: Bool
+  , maybeConfigsCount  :: Maybe Int
+  , binsCount          :: Int
+  , coarseGrained      :: Bool
+  , modulesCount       :: Int
+  , logging            :: Bool }
 
 options :: Parser Options
 options = Options
@@ -22,10 +22,10 @@ options = Options
          <> help "Enable fine grained lattice. It is not feasible for programs with many type annotations."
          <> showDefault)
       <*> option auto
-          ( long "samples"
-         <> metavar "SAMPLES"
-         <> value (-1)
-         <> help "Number of samples" )
+          ( long "configurations-count"
+         <> metavar "CONFIGS"
+         <> value Nothing
+         <> help "Number of configurations" )
       <*> option auto
           ( long "bins"
          <> help "Number of bins"

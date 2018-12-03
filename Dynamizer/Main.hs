@@ -1,19 +1,18 @@
 module Main where
 
-import           Control.Arrow       ((***))
-import           Control.Exception   (AssertionFailed (..), throwIO)
-import           Control.Monad       (foldM_, when)
-import qualified Data.DList          as DL
-import           Data.Monoid         (Product (..), Sum (..))
-import           Data.Semigroup      ((<>))
+import           Control.Arrow ((***))
+import           Control.Exception (AssertionFailed (..), throwIO)
+import           Control.Monad (foldM_, when)
+import qualified Data.DList as DL
+import           Data.Maybe (fromMaybe, isNothing)
+import           Data.Monoid (Product (..), Sum (..))
+import           Data.Semigroup ((<>))
 import           Options.Applicative (execParser, fullDesc, header, helper,
                                       info, progDesc, (<**>))
-import           System.Directory    (createDirectoryIfMissing,
-                                      removePathForcibly)
-import           System.FilePath     (dropExtension)
-import           System.IO           (IOMode (WriteMode), hClose, hPutStrLn,
-                                      openFile)
-import           Text.Printf         (hPrintf)
+import           System.Directory (createDirectoryIfMissing, removePathForcibly)
+import           System.FilePath (dropExtension)
+import           System.IO (IOMode (WriteMode), hClose, hPutStrLn, openFile)
+import           Text.Printf (hPrintf)
 
 import           Language.Grift.Common.Syntax
 import           Language.Grift.Common.Pretty
@@ -35,14 +34,16 @@ writeLattice b dname dps =
             return (n+1)) (0 :: Int) dps
 
 greet :: Options -> IO ()
-greet (Options srcFilePath fine ns nb coarse modules logEnabled) = do
+greet (Options srcFilePath fine maybeConfigsN nb coarse modules logEnabled) = do
   ast <- parseGriftProgram srcFilePath
   let (annotationLatticeSize,typeConstCount)  = (getProduct *** getSum) $ count ast
-      dirPath = dropExtension srcFilePath ++ "/"
-  l <- executionMode annotationLatticeSize typeConstCount ast
+  let dirPath = dropExtension srcFilePath ++ "/"
+  let samplingLinearScallingFactor = 10
+  let configsCount = fromMaybe (quot (typeConstCount*samplingLinearScallingFactor) nb) maybeConfigsN
+  l <- executionMode annotationLatticeSize typeConstCount configsCount ast
   writeLattice typeConstCount dirPath l
   where
-    executionMode annotationLatticeSize typeConstCount ast
+    executionMode annotationLatticeSize typeConstCount configsCount ast
       | coarse = case ast of
                    Script script -> return $ Script <$>
                      if modules > 0
@@ -52,15 +53,19 @@ greet (Options srcFilePath fine ns nb coarse modules logEnabled) = do
                      when (modules > 0) $ throwIO $ AssertionFailed "Modules number can not be specified by the user when the input program has modules"
                      return $ DL.toList $ moduleLattice ast
       | fine   = do
-       putStrLn ("There are " ++ show annotationLatticeSize ++ " less precisely typed programs and " ++ show typeConstCount ++ " type constructors")
-       fineMode annotationLatticeSize ast
+       putStrLn ("Number of all configurations: " ++ show annotationLatticeSize)
+       putStrLn ("Number of all type nodes: " ++ show typeConstCount)
+       putStrLn ("Number of requested configurations: " ++ show (configsCount*nb))
+       fineMode annotationLatticeSize configsCount ast
       | otherwise = throwIO $ AssertionFailed "fine or coarse switches are expected but none are provided"
 
-    fineMode annotationLatticeSize ast | ns == -1 && nb == 1 = return $ DL.toList $ lattice ast
-                                       | nb == 1 && annotationLatticeSize > 10000 = return $ sampleUniformally ast ns
-                                       | nb == 1 = return $ sampleUniformally' ast ns
-                                       | logEnabled = concat <$> runSampleFromBinsWithLogging ast ns nb
-                                       | otherwise = concat <$> runSampleFromBinsWithoutLogging ast ns nb
+    fineMode annotationLatticeSize configsCount ast
+      | isNothing maybeConfigsN && nb == 1 = return $ DL.toList $ lattice ast
+      | nb == 1 && annotationLatticeSize > 10000 = return $ sampleUniformally ast configsCount
+      | nb == 1 = return $ sampleUniformally' ast configsCount
+      | logEnabled = concat <$> runSampleFromBinsWithLogging ast configsCount nb
+      | otherwise = concat <$> runSampleFromBinsWithoutLogging ast configsCount nb
+
 main :: IO ()
 main = greet =<< execParser opts
   where
