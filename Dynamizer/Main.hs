@@ -4,7 +4,6 @@ import           Control.Arrow ((***))
 import           Control.Exception (AssertionFailed (..), throwIO)
 import           Control.Monad (foldM_, when)
 import qualified Data.DList as DL
-import           Data.Maybe (fromMaybe, isNothing)
 import           Data.Monoid (Product (..), Sum (..))
 import           Data.Semigroup ((<>))
 import           Options.Applicative (execParser, fullDesc, header, helper,
