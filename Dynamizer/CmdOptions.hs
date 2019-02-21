@@ -6,7 +6,7 @@ import           Options.Applicative
 data Options = Options
   { sourceFilePath     :: FilePath
   , fineGrained        :: Bool
-  , maybeConfigsCount  :: Maybe Int
+  , maybeConfigsCount  :: Int
   , binsCount          :: Int
   , coarseGrained      :: Bool
   , modulesCount       :: Int
@@ -24,7 +24,7 @@ options = Options
       <*> option auto
           ( long "configurations-count"
          <> metavar "CONFIGS"
-         <> value Nothing
+         <> value (-1)
          <> help "Number of configurations" )
       <*> option auto
           ( long "bins"
