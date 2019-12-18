@@ -12,30 +12,31 @@ languages such as reticulated python.
 
 ## Compiling
 
+The too is implemented in Haskell and can be built using [stack](https://docs.haskellstack.org/en/stable/README/).
+
 ```
 stack build
 ```
 
 ## Usage
-The dynamizer has several modes of execution, and will be described by example. However, it writes the generated configurations to disk as valid grift source files in a directory of the same name as the input program and located right beside that program.
+The dynamizer has several modes of execution, a few examples are provided. However, it writes the generated configurations to disk as valid grift source files in a directory of the same name as the input program and located right beside that program.
 
 Let's grab a Grift program for demo:
 ```bash
-wget https://raw.githubusercontent.com/Gradual-Typing/benchmarks/master/src/static/matmult.grift
+wget https://raw.githubusercontent.com/Gradual-Typing/benchmarks/master/src/static/matmult/single/matmult.grift 
 ```
 
-All configurations will be written to disk, 859963392 in this case, if no optional parameter is specified
-```bash
-dynamizer matmult.grift
-> There are 859963392 less precisely typed programs and 33 type constructors
+All configurations will be written to disk, 859963392 in this case, if no optional parameter is specified.
+```console
+$ stack exec dynamizer -- --fine matmult.grift
+Number of all configurations: 859963392
+Number of all type nodes: 33
 ```
 
-To generate 1000 samples, 100 from 0-10% statically typed bin, another 100 from 10-20%, and so on.
-```bash
-dynamizer matmult.grift --samples 100 --bins 10
-```
-
-To generate 2^10 samples where 10 is the number of modules the dynamizer creates out of all top-level functions in the code and each one is either fully typed or untyped
-```bash
-dynamizer matmult.grift --coarse 10
+To generate 1000 configurations, 100 from 0-10% statically typed bin, another 100 from 10-20%, and so on.
+```console
+$ stack exec dynamizer -- --fine --configurations-count 100 --bins 10  matmult.grift
+Number of all configurations: 859963392
+Number of all type nodes: 33
+Number of requested configurations: 1000
 ```

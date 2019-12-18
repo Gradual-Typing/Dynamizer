@@ -54,7 +54,6 @@ greet (Options srcFilePath fine configsN nb coarse modules logEnabled) = do
       | fine   = do
        putStrLn ("Number of all configurations: " ++ show annotationLatticeSize)
        putStrLn ("Number of all type nodes: " ++ show typeConstCount)
-       putStrLn ("Number of requested configurations: " ++ show (configsCount*nb))
        fineMode annotationLatticeSize configsCount ast
       | otherwise = throwIO $ AssertionFailed "fine or coarse switches are expected but none are provided"
 
@@ -62,8 +61,12 @@ greet (Options srcFilePath fine configsN nb coarse modules logEnabled) = do
       | configsN == -1 && nb == 1 = return $ DL.toList $ lattice ast
       | nb == 1 && annotationLatticeSize > 10000 = return $ sampleUniformally ast configsCount
       | nb == 1 = return $ sampleUniformally' ast configsCount
-      | logEnabled = concat <$> runSampleFromBinsWithLogging ast configsCount nb
-      | otherwise = concat <$> runSampleFromBinsWithoutLogging ast configsCount nb
+      | logEnabled = do
+        putStrLn ("Number of requested configurations: " ++ show (configsCount*nb))
+        concat <$> runSampleFromBinsWithLogging ast configsCount nb
+      | otherwise = do
+        putStrLn ("Number of requested configurations: " ++ show (configsCount*nb))
+        concat <$> runSampleFromBinsWithoutLogging ast configsCount nb
 
 main :: IO ()
 main = greet =<< execParser opts
